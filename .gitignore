@@ -1,0 +1,12 @@
+﻿upstream_labram/
+reference_old_code/
+experiments/
+data/
+outputs/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+__pycache__/
+.vscode/
+.idea/
