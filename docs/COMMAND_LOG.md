@@ -45,19 +45,7 @@
 
 ## 当前待执行命令
 
-### T008 — 暂存首批文档
-
-- 目的：把 `.gitignore` 和项目文档加入第一次提交的暂存区。
-- 执行位置：`D:\Documents\labram`
-- 是否修改状态：是；修改 Git 暂存区，不会上传远程仓库。
-- 风险：低；仅暂存已经检查过的忽略规则和文档。
-- 命令：
-
-  ```powershell
-  git -C D:\Documents\labram add .gitignore docs
-  ```
-
-- 执行后：把输出或新的 PowerShell 提示符发给我。
+目前没有待执行命令。
 
 
 ## 已执行记录
@@ -315,6 +303,25 @@
 - 结果：成功创建操作手册。
 - 相关问题 ID：无
 - 相关 commit：无
+
+### C014 — 首次上传到自己的 GitHub（成功）
+
+- 日期时间：`2026-08-21 16:59:38 +08:00`
+- ID：`C014`
+- 目的：把本地 `main` 分支首次上传到用户自己的 GitHub 仓库，并建立默认跟踪关系。
+- 执行位置：`D:\Documents\labram`
+- 命令：
+
+  ```powershell
+  git -C D:\Documents\labram push -u origin main
+  ```
+
+- 命令含义：将本地 `main` 推送到远程 `origin/main`；`-u` 让以后的 `git push` 和 `git pull` 默认使用该远程分支。
+- 是否修改状态：是；向 GitHub 新建并上传 `main` 分支，同时设置本地分支跟踪关系。
+- 风险：低；首次上传已检查过的提交。
+- 结果：成功。7 个对象已上传到 `https://github.com/Dorisgua/labram-low-channel.git`，远程新建 `main`，本地 `main` 已跟踪 `origin/main`。
+- 相关问题 ID：无
+- 相关 commit：`ed7c7d4`
 
 ## 尚未登记为已执行的用户本地操作
 
