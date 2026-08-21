@@ -323,6 +323,47 @@
 - 相关问题 ID：无
 - 相关 commit：`ed7c7d4`
 
+### C015 — 提交并上传更新后的命令日志
+
+- 日期时间：`2026-08-21 17:02 +08:00`
+- ID：`C015`
+- 目的：把首次 GitHub 上传记录提交并同步到远程仓库。
+- 执行位置：`D:\Documents\labram`
+- 命令：
+
+  ```powershell
+  git -C D:\Documents\labram add docs/COMMAND_LOG.md
+  git -C D:\Documents\labram commit -m "docs: record initial GitHub push"
+  git -C D:\Documents\labram push
+  ```
+
+- 命令含义：暂存日志、创建文档提交并推送到已跟踪的远程 `main`。
+- 是否修改状态：是；新增本地 commit 并更新远程 `main`。
+- 风险：低；只提交已检查的命令日志。
+- 结果：成功。远程 `main` 从 `ed7c7d4` 更新到 `c458c5c`。
+- 相关问题 ID：无
+- 相关 commit：`c458c5c`
+
+### C016 — 创建并上传初始版本 tag
+
+- 日期时间：`2026-08-21 17:03 +08:00`
+- ID：`C016`
+- 目的：为项目初始化状态建立可快速定位的固定版本标记。
+- 执行位置：`D:\Documents\labram`
+- 命令：
+
+  ```powershell
+  git -C D:\Documents\labram tag -a v0.1.0-init -m "Initial LaBraM project setup"
+  git -C D:\Documents\labram push origin v0.1.0-init
+  ```
+
+- 命令含义：在当前 commit 创建带说明的 tag，并上传到 GitHub。
+- 是否修改状态：是；本地和远程新增 `v0.1.0-init` tag。
+- 风险：低；只新增版本标记，不改动代码或历史。
+- 结果：成功。远程新增 tag `v0.1.0-init`，指向 commit `c458c5c`。
+- 相关问题 ID：无
+- 相关 commit：`c458c5c`
+
 ## 尚未登记为已执行的用户本地操作
 
 聊天中提到的下载 LaBraM、建立目录、初始化 Git 和上传 GitHub 等命令，目前没有用户已在 Windows 本地执行成功的确认，因此不列入“已执行记录”。
