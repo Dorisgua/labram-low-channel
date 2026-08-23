@@ -55,7 +55,7 @@ Siene/processed_data_10s_200hz/
 ## 第一版训练
 
 ```bash
-bash scripts/40Omeanpool.finetune_siena29_labrambase_freeze_cnn.sh
+bash scripts/siena/40Omeanpool.finetune_siena29_labrambase_freeze_cnn.sh
 ```
 
 配置：29 通道、10 秒、200 Hz、mean pooling、冻结 CNN、无 prototype、seed 0，默认 2 epochs 做 smoke test。

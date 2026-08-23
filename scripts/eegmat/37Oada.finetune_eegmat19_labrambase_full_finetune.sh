@@ -3,7 +3,7 @@ set -euo pipefail
 # PreExp37 EEGMAT AdaBrain-style LaBraM baseline: 19 channels, all-token
 # constrained head, full fine-tuning, deterministic cross-subject split.
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -46,7 +46,7 @@ BEST_METRIC="${BEST_METRIC:-accuracy}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-preexp37_eegmat19_adabrain_full_finetune_cross_subject}"
-OUTPUT_ROOT="./outputs/${EXP_GROUP}"
+OUTPUT_ROOT="./outputs/eegmat/${EXP_GROUP}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

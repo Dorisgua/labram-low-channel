@@ -4,7 +4,7 @@ set -euo pipefail
 # Default: sequential execution. Set TASK_GPUS=0,1 to run two independent
 # single-GPU tasks concurrently, one worker per physical GPU.
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 GPU_IDS="${GPU_IDS:-0}"
@@ -15,12 +15,12 @@ DRY_RUN="${DRY_RUN:-0}"
 
 SEED_PROTOTYPE="docs/prototypes/01_seed62_cnn_patch_embed_mean.pth"
 EXPERIMENTS=(
-    "scripts/36Oada.finetune_seed62_labrambase_freeze_cnn.sh"
-    "scripts/36Nada.finetune_seed23_labrambase_freeze_cnn.sh"
-    "scripts/36Omeanpool.finetune_seed62_labrambase_freeze_cnn.sh"
-    "scripts/36Nmeanpool.finetune_seed23_labrambase_freeze_cnn.sh"
-    "scripts/36Ahmeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
-    "scripts/36Almeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Oada.finetune_seed62_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Nada.finetune_seed23_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Omeanpool.finetune_seed62_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Nmeanpool.finetune_seed23_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Ahmeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Almeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
 )
 SEEDS=(0 1 2)
 
@@ -40,7 +40,7 @@ if [[ "${DRY_RUN}" != "1" && ! -f "${SEED_PROTOTYPE}" ]]; then
 fi
 
 BATCH_ID="$(date +%Y%m%d_%H%M%S)"
-BATCH_LOG_DIR="outputs/preexp36_batch_logs"
+BATCH_LOG_DIR="outputs/seed/batch_logs"
 BATCH_LOG="${BATCH_LOG_DIR}/run_36_experiments_seed012_${BATCH_ID}.log"
 mkdir -p "${BATCH_LOG_DIR}"
 

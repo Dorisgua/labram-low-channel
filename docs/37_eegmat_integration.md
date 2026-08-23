@@ -66,14 +66,14 @@ T5, T6, P3, P4, O1, O2, FZ, CZ, PZ
 运行脚本：
 
 ```text
-scripts/37Omeanpool.finetune_eegmat19_labrambase_freeze_cnn.sh
+scripts/eegmat/37Omeanpool.finetune_eegmat19_labrambase_freeze_cnn.sh
 ```
 
 脚本默认2个 epoch，作为短跑检查。正式实验需要显式设置正式 epoch 数，例如：
 
 ```bash
 GPU_IDS=0 EPOCHS=50 SEED=0 \
-  bash scripts/37Omeanpool.finetune_eegmat19_labrambase_freeze_cnn.sh
+  bash scripts/eegmat/37Omeanpool.finetune_eegmat19_labrambase_freeze_cnn.sh
 ```
 
 ## Smoke test
@@ -88,7 +88,7 @@ GPU_IDS=0 EPOCHS=50 SEED=0 \
 输出组：
 
 ```text
-outputs/preexp37_eegmat19_mean_pool_cross_subject
+outputs/eegmat/preexp37_eegmat19_mean_pool_cross_subject
 ```
 
 下一步应先完成全通道 mean-pooling 正式 seed 0，再考虑 seeds 1/2、AdaBrain 分类头、少通道或 prototype。

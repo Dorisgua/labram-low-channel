@@ -52,7 +52,7 @@ from data_processor.zuo2025 import prepare_Zuo2025_cross_subject_dataset
 Zuo2025 已注册到 `run_class_finetuning.py`。第一版启动脚本为：
 
 ```text
-scripts/38Omeanpool.finetune_zuo2025_30_labrambase_freeze_cnn.sh
+scripts/zuo2025/38Omeanpool.finetune_zuo2025_30_labrambase_freeze_cnn.sh
 ```
 
 它使用全 30 通道、`mean_pool`、冻结 CNN、无 prototype，默认 seed 0 和 2 epochs，作为第一轮 smoke test。运行前必须先完成上述预处理。

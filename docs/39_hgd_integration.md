@@ -53,7 +53,7 @@ HGD/processed_data_4s_200hz/
 ## 第一版训练
 
 ```bash
-bash scripts/39Omeanpool.finetune_hgd78_labrambase_freeze_cnn.sh
+bash scripts/hgd/39Omeanpool.finetune_hgd78_labrambase_freeze_cnn.sh
 ```
 
 配置为 78 通道、4 秒、mean pooling、冻结 CNN、无 prototype、seed 0，默认 2 epochs 用于 smoke test。

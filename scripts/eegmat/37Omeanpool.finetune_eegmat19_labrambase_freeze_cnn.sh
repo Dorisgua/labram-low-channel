@@ -3,7 +3,7 @@ set -euo pipefail
 # PreExp37 minimal EEGMAT baseline: 19 channels, no completion, frozen CNN,
 # original LaBraM mean-pooling classifier, deterministic cross-subject split.
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -43,7 +43,7 @@ CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-preexp37_eegmat19_mean_pool_cross_subject}"
-OUTPUT_ROOT="./outputs/${EXP_GROUP}"
+OUTPUT_ROOT="./outputs/eegmat/${EXP_GROUP}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

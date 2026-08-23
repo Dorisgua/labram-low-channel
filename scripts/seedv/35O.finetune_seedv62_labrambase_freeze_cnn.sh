@@ -3,7 +3,7 @@ set -euo pipefail
 # SEED-V 62-channel launcher. By default it freezes patch_embed/CNN and trains
 # the Transformer plus the original LaBraM mean-pooling classification head.
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -50,7 +50,7 @@ DRY_RUN="${DRY_RUN:-0}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-preexp35_seedv62_freeze_cnn}"
-OUTPUT_ROOT="./outputs/${EXP_GROUP}"
+OUTPUT_ROOT="./outputs/seedv/${EXP_GROUP}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

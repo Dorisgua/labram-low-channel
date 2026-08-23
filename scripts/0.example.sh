@@ -42,7 +42,7 @@ EXP_NAME="example_preexp12"
 
 # Where checkpoints are saved.
 # Recommended pattern: ./outputs/preexp12/checkpoints/${EXP_NAME}
-OUTPUT_DIR="./outputs/preexp12/checkpoints/${EXP_NAME}"
+OUTPUT_DIR="./outputs/tuev/preexp12/checkpoints/${EXP_NAME}"
 
 # Where tensorboard logs are saved.
 # Recommended pattern: ./outputs/preexp12/tensorboard/${EXP_NAME}

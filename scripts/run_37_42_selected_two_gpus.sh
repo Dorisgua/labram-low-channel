@@ -14,9 +14,9 @@ RUN_ID="$(date +%Y%m%d_%H%M%S)"
 LAUNCHER_LOG_DIR="${LAUNCHER_LOG_DIR:-outputs/launcher_logs}"
 mkdir -p "${LAUNCHER_LOG_DIR}"
 
-FACED_FULL_SCRIPT="scripts/42Oada.finetune_faced32_labrambase_mlp_full_finetune.sh"
-FACED_FREEZE_SCRIPT="scripts/42Oada.finetune_faced32_labrambase_mlp_freeze_cnn.sh"
-EEGMAT_FREEZE_SCRIPT="scripts/37Oada.finetune_eegmat19_labrambase_freeze_cnn.sh"
+FACED_FULL_SCRIPT="scripts/faced/42Oada.finetune_faced32_labrambase_mlp_full_finetune.sh"
+FACED_FREEZE_SCRIPT="scripts/faced/42Oada.finetune_faced32_labrambase_mlp_freeze_cnn.sh"
+EEGMAT_FREEZE_SCRIPT="scripts/eegmat/37Oada.finetune_eegmat19_labrambase_freeze_cnn.sh"
 
 for script in "${FACED_FULL_SCRIPT}" "${FACED_FREEZE_SCRIPT}" "${EEGMAT_FREEZE_SCRIPT}"; do
     if [[ ! -f "${script}" ]]; then

@@ -3,7 +3,7 @@ set -euo pipefail
 # PreExp43 AAD baseline: 84 channels, subject-disjoint 24/3/3 split,
 # LaBraM mean-pooling classifier, frozen CNN/patch_embed.
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -40,7 +40,7 @@ CHANNEL_SUBSET="${CHANNEL_SUBSET:-aad84}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-preexp43_aad84_mean_pool_subject_split}"
-OUTPUT_ROOT="./outputs/${EXP_GROUP}"
+OUTPUT_ROOT="./outputs/aad/${EXP_GROUP}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

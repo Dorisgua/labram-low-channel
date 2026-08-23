@@ -4,7 +4,7 @@ set -euo pipefail
 # Run Attention freeze-CNN configs for missing seeds.
 # Defaults: 44O/44N/44A with seed 1 and seed 2.
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 TASK_GPUS="${TASK_GPUS:-auto}"
@@ -15,9 +15,9 @@ DRY_RUN="${DRY_RUN:-0}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 ATTENTION_SEEDS=(${ATTENTION_SEEDS:-1 2})
 
-ATTENTION_O_SCRIPT="scripts/44Omeanpool.finetune_attention26_labrambase_freeze_cnn.sh"
-ATTENTION_N_SCRIPT="scripts/44Nmeanpool.finetune_attention10_labrambase_freeze_cnn.sh"
-ATTENTION_A_SCRIPT="scripts/44Ameanpool.finetune_attention10_with_attention26_prototype_labrambase_freeze_cnn.sh"
+ATTENTION_O_SCRIPT="scripts/attention/44Omeanpool.finetune_attention26_labrambase_freeze_cnn.sh"
+ATTENTION_N_SCRIPT="scripts/attention/44Nmeanpool.finetune_attention10_labrambase_freeze_cnn.sh"
+ATTENTION_A_SCRIPT="scripts/attention/44Ameanpool.finetune_attention10_with_attention26_prototype_labrambase_freeze_cnn.sh"
 ATTENTION_PROTOTYPE="docs/prototypes/01_attention26_cnn_patch_embed_mean.pth"
 ATTENTION_MANIFEST="/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Attention/processed_data_4s_200hz/manifest.json"
 
@@ -39,7 +39,7 @@ if [[ ! -f "${ATTENTION_MANIFEST}" ]]; then
 fi
 
 BATCH_ID="$(date +%Y%m%d_%H%M%S)"
-BATCH_LOG_DIR="outputs/selected_batch_logs"
+BATCH_LOG_DIR="outputs/attention/batch_logs"
 BATCH_LOG="${BATCH_LOG_DIR}/run_44_attention_freeze_seed1_2_${BATCH_ID}.log"
 mkdir -p "${BATCH_LOG_DIR}"
 exec > >(tee -a "${BATCH_LOG}") 2>&1

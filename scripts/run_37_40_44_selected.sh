@@ -32,13 +32,13 @@ EEGMAT_SEEDS=(${EEGMAT_SEEDS:-0 1 2})
 SIENA_SEEDS=(${SIENA_SEEDS:-0})
 ATTENTION_SEEDS=(${ATTENTION_SEEDS:-0})
 
-EEGMAT_N_SCRIPT="scripts/37Nada.finetune_eegmat8_labrambase_freeze_cnn.sh"
-EEGMAT_A_SCRIPT="scripts/37Aada.finetune_eegmat8_with_eegmat19_prototype_labrambase_freeze_cnn.sh"
-SIENA_A_SCRIPT="scripts/40Aada.finetune_siena13_with_siena29_prototype_labrambase_freeze_cnn.sh"
-SIENA_N_SCRIPT="scripts/40Nada.finetune_siena13_labrambase_freeze_cnn.sh"
-ATTENTION_FULL_SCRIPT="scripts/44Omeanpool.finetune_attention26_labrambase_full_finetune.sh"
-ATTENTION_N_SCRIPT="scripts/44Nmeanpool.finetune_attention10_labrambase_full_finetune.sh"
-ATTENTION_A_SCRIPT="scripts/44Ameanpool.finetune_attention10_with_attention26_prototype_labrambase_full_finetune.sh"
+EEGMAT_N_SCRIPT="scripts/eegmat/37Nada.finetune_eegmat8_labrambase_freeze_cnn.sh"
+EEGMAT_A_SCRIPT="scripts/eegmat/37Aada.finetune_eegmat8_with_eegmat19_prototype_labrambase_freeze_cnn.sh"
+SIENA_A_SCRIPT="scripts/siena/40Aada.finetune_siena13_with_siena29_prototype_labrambase_freeze_cnn.sh"
+SIENA_N_SCRIPT="scripts/siena/40Nada.finetune_siena13_labrambase_freeze_cnn.sh"
+ATTENTION_FULL_SCRIPT="scripts/attention/44Omeanpool.finetune_attention26_labrambase_full_finetune.sh"
+ATTENTION_N_SCRIPT="scripts/attention/44Nmeanpool.finetune_attention10_labrambase_full_finetune.sh"
+ATTENTION_A_SCRIPT="scripts/attention/44Ameanpool.finetune_attention10_with_attention26_prototype_labrambase_full_finetune.sh"
 
 EEGMAT_PROTOTYPE="docs/prototypes/01_eegmat19_cnn_patch_embed_mean.pth"
 SIENA_PROTOTYPE="docs/prototypes/01_siena29_cnn_patch_embed_mean.pth"
