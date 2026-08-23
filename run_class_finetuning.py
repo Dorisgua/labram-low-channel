@@ -36,6 +36,7 @@ from data_processor.bciiv2a import prepare_BCIIV2A_multisession_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
 from data_processor.physionet import prepare_PhysioNet_motor_imagery_dataset
 from data_processor.seed import prepare_SEED_cross_subject_dataset
+from data_processor.seedv import prepare_SEEDV_dataset
 from data_processor.zuo2025 import prepare_Zuo2025_cross_subject_dataset
 from data_processor.hgd import prepare_HGD_official_dataset
 from data_processor.siena import prepare_Siena_cross_subject_dataset
@@ -58,9 +59,10 @@ from Channels_definition import (
     PHYSIONET_64_CHANNELS,
     SEED_23_CHANNELS,
     SEED_62_CHANNELS,
+    SEEDV_23_CHANNELS,
+    SEEDV_62_CHANNELS,
     TUEV_13_CHANNELS,
     TUEV_23_CHANNELS,
-    SEEDV_62_CHANNELS,
     TUEV23_SEEDV62_EXTRA_CHANNELS,
     ZUO2025_30_CHANNELS,
     HGD_78_CHANNELS,
@@ -359,6 +361,21 @@ DATASET_CONFIGS = {
         'input_scale': 0.01,
         'num_t': 1,
         'nb_classes': 3,
+        'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
+    },
+    'SEEDV': {
+        'root': '/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/SEED_V/SEED-V-labram',
+        'prepare_fn': prepare_SEEDV_dataset,
+        'ch_names': {
+            'seedv23': SEEDV_23_CHANNELS,
+            'seedv62': SEEDV_62_CHANNELS,
+        },
+        'pass_channel_names': True,
+        'validate_loader_channel_names': True,
+        # Preprocessing already divided microvolt values by 100 in each pickle.
+        'input_scale': 1.0,
+        'num_t': 1,
+        'nb_classes': 5,
         'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
     },
     'EEGMAT': {
