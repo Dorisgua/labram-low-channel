@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # PhysioNet 32-channel CNN-frozen fine-tuning. Reuse the audited 64-channel
 # launcher while overriding the subset, output namespace, and rendezvous port.
 

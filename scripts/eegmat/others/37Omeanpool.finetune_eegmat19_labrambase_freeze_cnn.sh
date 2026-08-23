@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
+
 # EEGMAT O mean-pool freeze-CNN wrapper: preserve the original bias settings.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BASE_SCRIPT="${SCRIPT_DIR}/37Oada.finetune_eegmat19_labrambase_full_finetune.sh"

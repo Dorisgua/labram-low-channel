@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 # Run the seven PreExp36 SEED configurations for seeds 0, 1, and 2.
 # Default: sequential execution. Set TASK_GPUS=0,1 to run two independent
 # single-GPU tasks concurrently, one worker per physical GPU.

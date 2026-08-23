@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # ERP CORE PT baseline: CSLP-AE subject split, 12 classes excluding N170,
 # LaBraM-compatible full EEG subset (28 channels; HEOG/VEOG excluded).
 
@@ -54,7 +59,7 @@ CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-${SCRIPT_NAME%.sh}}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/${EXP_GROUP}}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/erpcore/${OUTPUT_SCRIPT_NAME}}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

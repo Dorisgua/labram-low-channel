@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # PhysioNet: use 32 real channels, complete to 64 with train-set CNN
 # prototypes, freeze CNN, and train the Transformer plus classification head.
 

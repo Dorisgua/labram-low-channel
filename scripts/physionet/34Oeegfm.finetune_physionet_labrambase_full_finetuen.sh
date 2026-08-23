@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
+
 # PhysioNet O full-finetune wrapper: reuse the 64-channel command without freezing CNN.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BASE_SCRIPT="${SCRIPT_DIR}/34Oeegfm.finetune_physionet_labrambase_freeze_cnn.sh"

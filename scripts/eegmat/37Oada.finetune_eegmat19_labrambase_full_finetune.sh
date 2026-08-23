@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # PreExp37 EEGMAT base launcher. Defaults to 19 real channels, AdaBrain
 # all-token classification, full fine-tuning, and the cross-subject split.
 
@@ -50,7 +55,7 @@ BEST_METRIC="${BEST_METRIC:-accuracy}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-preexp37_eegmat19_adabrain_full_finetune_cross_subject}"
-OUTPUT_ROOT="./outputs/eegmat/${EXP_GROUP}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/eegmat/${OUTPUT_SCRIPT_NAME}}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

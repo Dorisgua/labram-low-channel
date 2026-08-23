@@ -43,7 +43,7 @@ export FINETUNE="${FINETUNE:-${REPO_DIR}/checkpoints/labram-base.pth}"
 # 2. 跨数据集公共优化参数
 # -----------------------------------------------------------------------------
 
-# 统一基准：单卡 batch 64，训练 50 epochs，学习率 5e-4。
+# 统一基准：单卡 batch 64，训练 50 epochs，学习率 5e-4，采样率 200 Hz。
 export BATCH_SIZE="${BATCH_SIZE:-64}"
 export UPDATE_FREQ="${UPDATE_FREQ:-1}"
 export EPOCHS="${EPOCHS:-50}"
@@ -51,6 +51,7 @@ export LR="${LR:-5e-4}"
 export WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
 export WEIGHT_DECAY="${WEIGHT_DECAY:-0.05}"
 export LAYER_DECAY="${LAYER_DECAY:-1.0}"
+export SAMPLING_RATE="${SAMPLING_RATE:-200}"
 export DROP_PATH="${DROP_PATH:-0.1}"
 export SMOOTHING="${SMOOTHING:-0.1}"
 export SAVE_CKPT_FREQ="${SAVE_CKPT_FREQ:-5}"
@@ -78,6 +79,7 @@ print_common_config() {
         "  WARMUP_EPOCHS=${WARMUP_EPOCHS}" \
         "  WEIGHT_DECAY=${WEIGHT_DECAY}" \
         "  LAYER_DECAY=${LAYER_DECAY}" \
+        "  SAMPLING_RATE=${SAMPLING_RATE}" \
         "  DROP_PATH=${DROP_PATH}" \
         "  SMOOTHING=${SMOOTHING}" \
         "  SAVE_CKPT_FREQ=${SAVE_CKPT_FREQ}" \

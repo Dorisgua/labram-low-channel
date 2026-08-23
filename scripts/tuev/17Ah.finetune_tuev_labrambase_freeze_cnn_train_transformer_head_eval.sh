@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # LaBraM base on TUEV-23: freeze CNN/patch_embed and train transformer/head.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -156,7 +161,7 @@ OMP_NUM_THREADS=1
 
 # Experiment group name used under ./outputs/.
 EXP_GROUP="preexp17_tuev"
-OUTPUT_ROOT="./outputs/tuev/${EXP_GROUP}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/tuev/${OUTPUT_SCRIPT_NAME}}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

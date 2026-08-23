@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # LaBraM base on PhysioNet EEGMMIDB: 64-channel full fine-tuning.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -52,7 +57,7 @@ NO_AUTO_RESUME="${NO_AUTO_RESUME:-1}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
 EXP_GROUP="${EXP_GROUP:-preexp34_physionet_motor_imagery}"
-OUTPUT_ROOT="./outputs/physionet/${EXP_GROUP}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/physionet/${OUTPUT_SCRIPT_NAME}}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"

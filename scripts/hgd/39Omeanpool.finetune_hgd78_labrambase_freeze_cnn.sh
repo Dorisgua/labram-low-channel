@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-$(basename -- "${BASH_SOURCE[0]}")}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME%.sh}"
+OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME//./_}"
+export OUTPUT_SCRIPT_NAME
 # PreExp39 HGD 基线：使用 78 个 LaBraM 可定位通道，保留官方 test 文件，
 # 不做通道补全，冻结 CNN/patch_embed，分类头使用 LaBraM mean pooling。
 
@@ -83,7 +88,7 @@ TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/g
 # TB_LOG_DIR：保存 TensorBoard 日志。
 # TERMINAL_LOG：保存 shell 和 torchrun 的 stdout/stderr。
 EXP_GROUP="${EXP_GROUP:-preexp39_hgd78_mean_pool_official_split}"
-OUTPUT_ROOT="./outputs/hgd/${EXP_GROUP}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/hgd/${OUTPUT_SCRIPT_NAME}}"
 OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
 TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
 TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"
