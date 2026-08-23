@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="820" viewBox="0 0 800 820" role="img" aria-labelledby="title desc">
+  <title id="title">BCI-IV-2a 22 通道与推荐的 33N 十三通道布局</title>
+  <desc id="desc">头顶俯视图。绿色为 33N 建议保留的十三个通道，红色为建议掩盖的九个通道。</desc>
+  <defs>
+    <style>
+      .title { font: 700 25px sans-serif; fill: #172033; }
+      .subtitle { font: 15px sans-serif; fill: #4b5563; }
+      .head { fill: #fbfcfe; stroke: #60708a; stroke-width: 4; }
+      .feature { fill: none; stroke: #60708a; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .kept { fill: #d9f7e8; stroke: #16855b; stroke-width: 3; }
+      .masked { fill: #ffe4e1; stroke: #c54840; stroke-width: 3; stroke-dasharray: 5 3; }
+      .label { font: 700 14px sans-serif; fill: #172033; text-anchor: middle; dominant-baseline: middle; }
+      .legend { font: 15px sans-serif; fill: #263247; dominant-baseline: middle; }
+      .axis { font: 13px sans-serif; fill: #667085; }
+    </style>
+  </defs>
+
+  <rect width="800" height="820" fill="#ffffff"/>
+  <text x="400" y="38" class="title" text-anchor="middle">BCI-IV-2a：22 → 13 通道建议</text>
+  <text x="400" y="65" class="subtitle" text-anchor="middle">俯视图：上方为鼻子，左侧为左半球</text>
+
+  <!-- Head, nose, and ears -->
+  <ellipse cx="400" cy="390" rx="300" ry="305" class="head"/>
+  <path d="M365 91 L400 56 L435 91" class="feature"/>
+  <path d="M102 325 C66 330 66 445 105 451" class="feature"/>
+  <path d="M698 325 C734 330 734 445 695 451" class="feature"/>
+  <text x="108" y="735" class="axis">左半球</text>
+  <text x="636" y="735" class="axis">右半球</text>
+
+  <!-- F row -->
+  <g><circle cx="400" cy="135" r="26" class="kept"/><text x="400" y="135" class="label">FZ</text></g>
+
+  <!-- FC row -->
+  <g><circle cx="245" cy="225" r="26" class="kept"/><text x="245" y="225" class="label">FC3</text></g>
+  <g><circle cx="325" cy="207" r="26" class="masked"/><text x="325" y="207" class="label">FC1</text></g>
+  <g><circle cx="400" cy="200" r="26" class="kept"/><text x="400" y="200" class="label">FCZ</text></g>
+  <g><circle cx="475" cy="207" r="26" class="masked"/><text x="475" y="207" class="label">FC2</text></g>
+  <g><circle cx="555" cy="225" r="26" class="kept"/><text x="555" y="225" class="label">FC4</text></g>
+
+  <!-- C row -->
+  <g><circle cx="155" cy="350" r="26" class="kept"/><text x="155" y="350" class="label">C5</text></g>
+  <g><circle cx="235" cy="345" r="26" class="kept"/><text x="235" y="345" class="label">C3</text></g>
+  <g><circle cx="315" cy="342" r="26" class="masked"/><text x="315" y="342" class="label">C1</text></g>
+  <g><circle cx="400" cy="340" r="26" class="kept"/><text x="400" y="340" class="label">CZ</text></g>
+  <g><circle cx="485" cy="342" r="26" class="masked"/><text x="485" y="342" class="label">C2</text></g>
+  <g><circle cx="565" cy="345" r="26" class="kept"/><text x="565" y="345" class="label">C4</text></g>
+  <g><circle cx="645" cy="350" r="26" class="kept"/><text x="645" y="350" class="label">C6</text></g>
+
+  <!-- CP row -->
+  <g><circle cx="245" cy="468" r="26" class="kept"/><text x="245" y="468" class="label">CP3</text></g>
+  <g><circle cx="325" cy="486" r="26" class="masked"/><text x="325" y="486" class="label">CP1</text></g>
+  <g><circle cx="400" cy="493" r="26" class="kept"/><text x="400" y="493" class="label">CPZ</text></g>
+  <g><circle cx="475" cy="486" r="26" class="masked"/><text x="475" y="486" class="label">CP2</text></g>
+  <g><circle cx="555" cy="468" r="26" class="kept"/><text x="555" y="468" class="label">CP4</text></g>
+
+  <!-- P and PO rows -->
+  <g><circle cx="325" cy="585" r="26" class="masked"/><text x="325" y="585" class="label">P1</text></g>
+  <g><circle cx="400" cy="595" r="26" class="kept"/><text x="400" y="595" class="label">PZ</text></g>
+  <g><circle cx="475" cy="585" r="26" class="masked"/><text x="475" y="585" class="label">P2</text></g>
+  <g><circle cx="400" cy="675" r="26" class="masked"/><text x="400" y="675" class="label">POZ</text></g>
+
+  <!-- Legend -->
+  <circle cx="250" cy="775" r="17" class="kept"/>
+  <text x="278" y="775" class="legend">保留：13</text>
+  <circle cx="455" cy="775" r="17" class="masked"/>
+  <text x="483" y="775" class="legend">掩盖：9</text>
+</svg>

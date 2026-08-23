@@ -1,8 +1,41 @@
-checkpoints/
+# Training outputs
+outputs/
+legacy_outputs/
+launcher_logs/
+selected_batch_logs/
 log/
 run_logs/
+tensorboard/
+runs/
+wandb/
+*.log
+
+# Large model/data artifacts
+checkpoints/
+data/
 *.pth
 *.pt
+*.ckpt
 *.pkl
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.mat
+*.edf
+*.arrow
+*.parquet
+
+# Keep small channel prototypes
+!docs/prototypes/*.pth
+
+# Python caches
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors
+.vscode/
+.idea/

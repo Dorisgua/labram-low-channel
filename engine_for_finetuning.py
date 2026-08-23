@@ -31,7 +31,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, log_writer=None,
                     start_steps=None, lr_schedule_values=None, wd_schedule_values=None,
-                    num_training_steps_per_epoch=None, update_freq=None, ch_names=None, is_binary=True):
+                    num_training_steps_per_epoch=None, update_freq=None, ch_names=None, is_binary=True,
+                    input_scale=0.01):
     input_chans = None
     if ch_names is not None:
         input_chans = utils.get_input_chans(ch_names)
@@ -61,7 +62,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                 if wd_schedule_values is not None and param_group["weight_decay"] > 0:
                     param_group["weight_decay"] = wd_schedule_values[it]
 
-        samples = samples.float().to(device, non_blocking=True) / 100
+        samples = samples.float().to(device, non_blocking=True) * input_scale
         samples = rearrange(samples, 'B N (A T) -> B N A T', T=200)
         
         targets = targets.to(device, non_blocking=True)
@@ -151,7 +152,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(data_loader, model, device, header='Test:', ch_names=None, metrics=['acc'], is_binary=True):
+def evaluate(data_loader, model, device, header='Test:', ch_names=None, metrics=['acc'], is_binary=True,
+             input_scale=0.01):
     input_chans = None
     if ch_names is not None:
         input_chans = utils.get_input_chans(ch_names)
@@ -170,7 +172,7 @@ def evaluate(data_loader, model, device, header='Test:', ch_names=None, metrics=
     for step, batch in enumerate(metric_logger.log_every(data_loader, 10, header)):
         EEG = batch[0]
         target = batch[-1]
-        EEG = EEG.float().to(device, non_blocking=True) / 100
+        EEG = EEG.float().to(device, non_blocking=True) * input_scale
         EEG = rearrange(EEG, 'B N (A T) -> B N A T', T=200)
         target = target.to(device, non_blocking=True)
         if is_binary:
