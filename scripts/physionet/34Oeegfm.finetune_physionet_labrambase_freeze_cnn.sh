@@ -17,6 +17,7 @@ NUM_WORKERS="${NUM_WORKERS:-4}"
 MASTER_PORT="${MASTER_PORT:-29500}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-${GPU_IDS}}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+FREEZE_CNN="${FREEZE_CNN:-1}"
 
 # Conservative default batch size for 64 channels (257 tokens including CLS).
 BATCH_SIZE="${BATCH_SIZE:-64}"
@@ -41,6 +42,7 @@ BEST_METRIC="${BEST_METRIC:-balanced_accuracy}"
 COMPLETION_SCOPE="${COMPLETION_SCOPE:-none}"
 CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-}"
 POOLING_SCOPE="${POOLING_SCOPE:-low}"
+CLASSIFIER_MODE="${CLASSIFIER_MODE:-adabrain_all_token}"
 CLASSIFIER_TOKEN_SCOPE="${CLASSIFIER_TOKEN_SCOPE:-all}"
 
 RESUME="${RESUME:-}"
@@ -96,7 +98,7 @@ CMD=(
     --data_path "${DATA_PATH}"
     --completion_scope "${COMPLETION_SCOPE}"
     --pooling_scope "${POOLING_SCOPE}"
-    --classifier_mode adabrain_all_token
+    --classifier_mode "${CLASSIFIER_MODE}"
     --classifier_token_scope "${CLASSIFIER_TOKEN_SCOPE}"
     --best_metric "${BEST_METRIC}"
     --batch_size "${BATCH_SIZE}"
@@ -110,12 +112,18 @@ CMD=(
     --smoothing "${SMOOTHING}"
     --save_ckpt_freq "${SAVE_CKPT_FREQ}"
     --abs_pos_emb
-    --freeze_cnn
     --num_workers "${NUM_WORKERS}"
     --seed "${SEED}"
 )
 
-if [[ -n "${CHANNEL_PROTOTYPE_PATH}" ]]; then
+if [[ "${FREEZE_CNN}" == "1" ]]; then
+    CMD+=(--freeze_cnn)
+elif [[ "${FREEZE_CNN}" != "0" ]]; then
+    echo "FREEZE_CNN must be 0 or 1, got: ${FREEZE_CNN}" >&2
+    exit 2
+fi
+
+if [[ "${COMPLETION_SCOPE}" != "none" ]]; then
     CMD+=(--channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}")
 fi
 
@@ -128,6 +136,8 @@ fi
 if [[ "${NO_AUTO_RESUME}" == "1" ]]; then
     CMD+=(--no_auto_resume)
 fi
+
+CMD+=("$@")
 
 {
     echo "Command:"

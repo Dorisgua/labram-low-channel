@@ -17,6 +17,7 @@ NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 NUM_WORKERS="${NUM_WORKERS:-4}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-${GPU_IDS}}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+FREEZE_CNN="${FREEZE_CNN:-1}"
 
 # AdaBrain-aligned BCI-IV-2a optimization settings.
 BATCH_SIZE="${BATCH_SIZE:-64}"
@@ -34,17 +35,18 @@ SEED="${SEED:-0}"
 MODEL="labram_base_patch200_200"
 FINETUNE="${FINETUNE:-./checkpoints/labram-base.pth}"
 DATASET="bciiv2a"
-CHANNEL_SUBSET="bciiv2a13"
+CHANNEL_SUBSET="${CHANNEL_SUBSET:-bciiv2a13}"
 DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-test/AdaBrain-PreExp34-35-repro/AdaBrain-Bench-main_film/preprocessing/BCI-IV-2A/multi_subject_json}"
 SAMPLING_RATE="${SAMPLING_RATE:-200}"
 NORM_METHOD="${NORM_METHOD:-z_score}"
 BEST_METRIC="${BEST_METRIC:-balanced_accuracy}"
 CLASSIFIER_TOKEN_SCOPE="${CLASSIFIER_TOKEN_SCOPE:-all}"
 
-# Complete the 13 real channels to the original BCI-IV-2a 22-channel space.
-COMPLETION_SCOPE="bciiv2a13_with_bciiv2a22"
+# Default to the A path: complete 13 real channels to the original 22-channel space.
+# N wrappers override completion/pooling while reusing the same command assembly.
+COMPLETION_SCOPE="${COMPLETION_SCOPE:-bciiv2a13_with_bciiv2a22}"
 CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-docs/prototypes/01_bciiv2a22_cnn_patch_embed_mean.pth}"
-POOLING_SCOPE="high"
+POOLING_SCOPE="${POOLING_SCOPE:-high}"
 
 RESUME="${RESUME:-}"
 EVAL_ONLY="${EVAL_ONLY:-0}"
@@ -67,7 +69,7 @@ if [[ ! -f "${FINETUNE}" ]]; then
     echo "Missing finetune checkpoint: ${FINETUNE}"
     exit 1
 fi
-if [[ ! -f "${CHANNEL_PROTOTYPE_PATH}" ]]; then
+if [[ "${COMPLETION_SCOPE}" != "none" && ! -f "${CHANNEL_PROTOTYPE_PATH}" ]]; then
     echo "Missing BCI-IV-2a channel prototype: ${CHANNEL_PROTOTYPE_PATH}"
     echo "Generate it with: python docs/prototypes/01_generate_bciiv2a_cnn_patch_prototypes.py"
     exit 1
@@ -96,7 +98,6 @@ CMD=(
     --sampling_rate "${SAMPLING_RATE}"
     --norm_method "${NORM_METHOD}"
     --completion_scope "${COMPLETION_SCOPE}"
-    --channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}"
     --pooling_scope "${POOLING_SCOPE}"
     --classifier_mode adabrain_all_token
     --classifier_token_scope "${CLASSIFIER_TOKEN_SCOPE}"
@@ -112,10 +113,20 @@ CMD=(
     --smoothing "${SMOOTHING}"
     --save_ckpt_freq "${SAVE_CKPT_FREQ}"
     --abs_pos_emb
-    --freeze_cnn
     --num_workers "${NUM_WORKERS}"
     --seed "${SEED}"
 )
+
+if [[ "${COMPLETION_SCOPE}" != "none" ]]; then
+    CMD+=(--channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}")
+fi
+
+if [[ "${FREEZE_CNN}" == "1" ]]; then
+    CMD+=(--freeze_cnn)
+elif [[ "${FREEZE_CNN}" != "0" ]]; then
+    echo "FREEZE_CNN must be 0 or 1, got: ${FREEZE_CNN}" >&2
+    exit 2
+fi
 
 if [[ -n "${RESUME}" ]]; then
     CMD+=(--resume "${RESUME}")
@@ -126,6 +137,8 @@ fi
 if [[ "${NO_AUTO_RESUME}" == "1" ]]; then
     CMD+=(--no_auto_resume)
 fi
+
+CMD+=("$@")
 
 {
     echo "Command:"

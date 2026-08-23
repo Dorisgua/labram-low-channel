@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# SEED cross-subject baseline: all 62 channels, frozen CNN/patch_embed,
-# train the Transformer and AdaBrain all-token classification head.
+# SEED cross-subject base launcher. Defaults to all 62 real channels,
+# frozen CNN/patch_embed, and the AdaBrain all-token classification head.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
@@ -18,6 +18,7 @@ NUM_WORKERS="${NUM_WORKERS:-4}"
 MASTER_PORT="${MASTER_PORT:-29510}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-${GPU_IDS}}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+FREEZE_CNN="${FREEZE_CNN:-1}"
 
 BATCH_SIZE="${BATCH_SIZE:-64}"
 UPDATE_FREQ="${UPDATE_FREQ:-1}"
@@ -109,12 +110,18 @@ CMD=(
     --disable_rel_pos_bias
     --abs_pos_emb
     --disable_qkv_bias
-    --freeze_cnn
     --num_workers "${NUM_WORKERS}"
     --seed "${SEED}"
 )
 
-if [[ -n "${CHANNEL_PROTOTYPE_PATH}" ]]; then
+if [[ "${FREEZE_CNN}" == "1" ]]; then
+    CMD+=(--freeze_cnn)
+elif [[ "${FREEZE_CNN}" != "0" ]]; then
+    echo "FREEZE_CNN must be 0 or 1, got: ${FREEZE_CNN}" >&2
+    exit 2
+fi
+
+if [[ "${COMPLETION_SCOPE}" != "none" ]]; then
     CMD+=(--channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}")
 fi
 if [[ -n "${RESUME}" ]]; then
@@ -126,6 +133,8 @@ fi
 if [[ "${NO_AUTO_RESUME}" == "1" ]]; then
     CMD+=(--no_auto_resume)
 fi
+
+CMD+=("$@")
 
 {
     echo "Command:"

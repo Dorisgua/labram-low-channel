@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Run the six PreExp36 SEED configurations for seeds 0, 1, and 2.
+# Run the seven PreExp36 SEED configurations for seeds 0, 1, and 2.
 # Default: sequential execution. Set TASK_GPUS=0,1 to run two independent
 # single-GPU tasks concurrently, one worker per physical GPU.
 
@@ -21,6 +21,7 @@ EXPERIMENTS=(
     "scripts/seed/36Nmeanpool.finetune_seed23_labrambase_freeze_cnn.sh"
     "scripts/seed/36Ahmeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
     "scripts/seed/36Almeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Alada.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
 )
 SEEDS=(0 1 2)
 
@@ -74,6 +75,7 @@ run_one() {
         -u CHANNEL_PROTOTYPE_PATH
         -u POOLING_SCOPE
         -u CLASSIFIER_TOKEN_SCOPE
+        -u FREEZE_CNN
         -u EXP_GROUP
         -u RUN_PREFIX_OVERRIDE
         -u MASTER_PORT

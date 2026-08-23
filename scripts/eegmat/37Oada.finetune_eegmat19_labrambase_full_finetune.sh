@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# PreExp37 EEGMAT AdaBrain-style LaBraM baseline: 19 channels, all-token
-# constrained head, full fine-tuning, deterministic cross-subject split.
+# PreExp37 EEGMAT base launcher. Defaults to 19 real channels, AdaBrain
+# all-token classification, full fine-tuning, and the cross-subject split.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
@@ -42,6 +42,10 @@ NORM_METHOD="${NORM_METHOD:-z_score}"
 COMPLETION_SCOPE="${COMPLETION_SCOPE:-none}"
 POOLING_SCOPE="${POOLING_SCOPE:-low}"
 CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-}"
+CLASSIFIER_MODE="${CLASSIFIER_MODE:-adabrain_all_token}"
+CLASSIFIER_TOKEN_SCOPE="${CLASSIFIER_TOKEN_SCOPE:-all}"
+DISABLE_REL_POS_BIAS="${DISABLE_REL_POS_BIAS:-0}"
+DISABLE_QKV_BIAS="${DISABLE_QKV_BIAS:-0}"
 BEST_METRIC="${BEST_METRIC:-accuracy}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
@@ -68,6 +72,13 @@ if [[ "${COMPLETION_SCOPE}" != "none" && ! -f "${CHANNEL_PROTOTYPE_PATH}" ]]; th
     echo "Missing EEGMAT channel prototype: ${CHANNEL_PROTOTYPE_PATH}"
     exit 1
 fi
+for bool_name in FREEZE_CNN DISABLE_REL_POS_BIAS DISABLE_QKV_BIAS; do
+    bool_value="${!bool_name}"
+    if [[ "${bool_value}" != "0" && "${bool_value}" != "1" ]]; then
+        echo "${bool_name} must be 0 or 1, got: ${bool_value}" >&2
+        exit 2
+    fi
+done
 
 mkdir -p "${OUTPUT_DIR}" "${TB_LOG_DIR}" "${TERMINAL_LOG_DIR}"
 
@@ -88,8 +99,8 @@ CMD=(
     --norm_method "${NORM_METHOD}"
     --completion_scope "${COMPLETION_SCOPE}"
     --pooling_scope "${POOLING_SCOPE}"
-    --channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}"
-    --classifier_mode adabrain_all_token
+    --classifier_mode "${CLASSIFIER_MODE}"
+    --classifier_token_scope "${CLASSIFIER_TOKEN_SCOPE}"
     --best_metric "${BEST_METRIC}"
     --batch_size "${BATCH_SIZE}"
     --update_freq "${UPDATE_FREQ}"
@@ -107,9 +118,20 @@ CMD=(
     --no_auto_resume
 )
 
+if [[ "${COMPLETION_SCOPE}" != "none" ]]; then
+    CMD+=(--channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}")
+fi
+if [[ "${DISABLE_REL_POS_BIAS}" == "1" ]]; then
+    CMD+=(--disable_rel_pos_bias)
+fi
+if [[ "${DISABLE_QKV_BIAS}" == "1" ]]; then
+    CMD+=(--disable_qkv_bias)
+fi
 if [[ "${FREEZE_CNN}" == "1" ]]; then
     CMD+=(--freeze_cnn)
 fi
+
+CMD+=("$@")
 
 {
     echo "Command:"
@@ -117,9 +139,9 @@ fi
     printf '%q ' "${CMD[@]}"
     printf '\n\n'
     echo "EEGMAT protocol: Subject00-31 train/val, Subject32-35 test; channel_subset=${CHANNEL_SUBSET}"
-    echo "Classifier: AdaBrain all-token constrained head; freeze_cnn=${FREEZE_CNN}"
+    echo "Classifier: ${CLASSIFIER_MODE}; token_scope=${CLASSIFIER_TOKEN_SCOPE}; freeze_cnn=${FREEZE_CNN}"
     echo "Completion: ${COMPLETION_SCOPE}; prototype=${CHANNEL_PROTOTYPE_PATH:-<none>}; pooling_scope=${POOLING_SCOPE}"
-    echo "LaBraM options: rel_pos_bias enabled, qkv_bias enabled, abs_pos_emb enabled"
+    echo "LaBraM options: disable_rel_pos_bias=${DISABLE_REL_POS_BIAS}, disable_qkv_bias=${DISABLE_QKV_BIAS}, abs_pos_emb=1"
     echo "Terminal log: ${TERMINAL_LOG}"
 } | tee "${TERMINAL_LOG}"
 

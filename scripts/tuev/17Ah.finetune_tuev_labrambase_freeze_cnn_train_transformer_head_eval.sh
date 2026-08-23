@@ -6,7 +6,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_DIR}"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-RUN_PREFIX="${SCRIPT_NAME%.sh}"
+RUN_PREFIX="${RUN_PREFIX_OVERRIDE:-${SCRIPT_NAME%.sh}}"
 RUN_ID="$(date +%Y%m%d_%H%M%S)"
 RUN_NAME="${RUN_PREFIX}_${RUN_ID}"
 
@@ -79,20 +79,24 @@ DATASET="TUEV"
 # Channel subset choices currently planned:
 #   TUEV:  tuev13, tuev23
 #   SEEDV: seedv23, seedv62
-CHANNEL_SUBSET="tuev13"
+CHANNEL_SUBSET="${CHANNEL_SUBSET:-tuev13}"
 
 # Channel completion choices:
 #   none                         -> no channel completion
 #   tuev13_with_tuev23           -> input TUEV-13, complete to TUEV-23
 #   seedv23_with_seedv62         -> input SEEDV-23, complete to SEEDV-62
 #   tuev23_with_seedv62_extra    -> input TUEV-23, complete to TUEV-23 + SEEDV-extra
-COMPLETION_SCOPE="tuev13_with_tuev23"
-CHANNEL_PROTOTYPE_PATH="docs/prototypes/01_tuev23_cnn_patch_embed_mean.pth"
+COMPLETION_SCOPE="${COMPLETION_SCOPE:-tuev13_with_tuev23}"
+if [[ "${COMPLETION_SCOPE}" == "none" ]]; then
+    CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-}"
+else
+    CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-docs/prototypes/01_tuev23_cnn_patch_embed_mean.pth}"
+fi
 
 # Pooling choices:
 #   low  -> pool only real input-channel tokens
 #   high -> pool all target-channel tokens after completion
-POOLING_SCOPE="high"
+POOLING_SCOPE="${POOLING_SCOPE:-high}"
 
 # Validation metric used to select checkpoint-best.
 # Choices:
@@ -162,6 +166,10 @@ if [[ ! -f "${FINETUNE}" ]]; then
     echo "Missing finetune checkpoint: ${FINETUNE}"
     exit 1
 fi
+if [[ "${COMPLETION_SCOPE}" != "none" && ! -f "${CHANNEL_PROTOTYPE_PATH}" ]]; then
+    echo "Missing TUEV channel prototype: ${CHANNEL_PROTOTYPE_PATH}"
+    exit 1
+fi
 
 mkdir -p "${OUTPUT_DIR}" "${TB_LOG_DIR}" "${TERMINAL_LOG_DIR}"
 
@@ -194,8 +202,8 @@ CMD=(
     --num_workers "${NUM_WORKERS}"
     --seed "${SEED}"
 )
-if [[ -n "${CHANNEL_PROTOTYPE_PATH}" ]]; then
-      CMD+=(--channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}")
+if [[ "${COMPLETION_SCOPE}" != "none" ]]; then
+    CMD+=(--channel_prototype_path "${CHANNEL_PROTOTYPE_PATH}")
 fi
 
 if [[ "${FREEZE_CNN}" == "1" ]]; then
@@ -217,6 +225,8 @@ fi
 if [[ "${NO_AUTO_RESUME}" == "1" ]]; then
     CMD+=(--no_auto_resume)
 fi
+
+CMD+=("$@")
 
 {
     echo "Command:"
