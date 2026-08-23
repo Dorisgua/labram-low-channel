@@ -341,6 +341,11 @@ class NeuralTransformer(nn.Module):
             torch.zeros(26, embed_dim),
             persistent=False,
         )
+        self.register_buffer(
+            "erpcore28_channel_prototypes",
+            torch.zeros(28, embed_dim),
+            persistent=False,
+        )
 
         self.rel_pos_bias = None
 
@@ -497,6 +502,9 @@ class NeuralTransformer(nn.Module):
             elif self.completion_scope == "attention10_with_attention26":
                 # Attention 44A: 10 real channels completed to the native 26-channel montage.
                 prototypes = self.attention26_channel_prototypes
+            elif self.completion_scope == "erpcore12_with_erpcore28":
+                # ERP CORE: 12 real channels completed to the 28-channel target.
+                prototypes = self.erpcore28_channel_prototypes
             else:
                 raise ValueError(f"Unsupported completion_scope: {self.completion_scope}")
 

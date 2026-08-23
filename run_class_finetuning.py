@@ -44,6 +44,7 @@ from data_processor.fatig import prepare_Fatig_rest_task_dataset
 from data_processor.faced import prepare_FACED_cross_subject_dataset
 from data_processor.aad import prepare_AAD_cross_subject_dataset
 from data_processor.attention import prepare_Attention_cross_subject_dataset
+from data_processor.erpcore import prepare_ERPCORE_pt_dataset
 from Channels_definition import (
     ATTENTION_10_CHANNELS,
     ATTENTION_26_CHANNELS,
@@ -69,6 +70,8 @@ from Channels_definition import (
     HGD_MOTOR_20_CHANNELS,
     SIENA_13_CHANNELS,
     SIENA_29_CHANNELS,
+    ERPCORE_12_CHANNELS,
+    ERPCORE_28_CHANNELS,
 )
 
 def get_args():
@@ -211,7 +214,7 @@ def get_args():
 
     parser.add_argument('--enable_deepspeed', action='store_true', default=False)
     parser.add_argument('--dataset', default='TUAB', type=str,
-                        help='dataset: TUAB | TUEV | bciiv2a | physionet | SEED | EEGMAT | FACED | AAD | Zuo2025 | HGD | Siena | fatig')
+                        help='dataset: TUAB | TUEV | bciiv2a | physionet | SEED | SEEDV | EEGMAT | FACED | AAD | Attention | ERPCORE | Zuo2025 | HGD | Siena | fatig')
     parser.add_argument('--data_path', default='', type=str,
                         help='optional dataset root override')
     parser.add_argument('--sampling_rate', default=200, type=int,
@@ -231,7 +234,8 @@ def get_args():
                                  'seed23_with_seed62',
                                  'seedv23_with_seedv62', 'tuev23_with_seedv62_extra',
                                  'hgd20_with_hgd78', 'eegmat8_with_eegmat19',
-                                 'siena13_with_siena29', 'attention10_with_attention26'],
+                                 'siena13_with_siena29', 'attention10_with_attention26',
+                                 'erpcore12_with_erpcore28'],
                         help='target channel completion scope')
     parser.add_argument('--pooling_scope', default='low', type=str,
                         choices=['low', 'high'],
@@ -453,6 +457,24 @@ DATASET_CONFIGS = {
         'nb_classes': 2,
         'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
     },
+    'ERPCORE': {
+        'root': '/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt',
+        'prepare_fn': prepare_ERPCORE_pt_dataset,
+        'ch_names': {
+            'erpcore12': ERPCORE_12_CHANNELS,
+            'erpcore28': ERPCORE_28_CHANNELS,
+        },
+        'pass_channel_names': True,
+        'validate_loader_channel_names': True,
+        'prepare_kwargs_from_args': {
+            'sampling_rate': 'sampling_rate',
+            'normalize_method': 'norm_method',
+        },
+        'input_scale': 1.0,
+        'num_t': 1,
+        'nb_classes': 12,
+        'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
+    },
     'Zuo2025': {
         'root': '/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Zuo2025/processed_data_4s_200hz',
         'prepare_fn': prepare_Zuo2025_cross_subject_dataset,
@@ -593,6 +615,7 @@ def _validate_completion_prototype(args, ch_names, target_ch_names, target_input
         "eegmat8_with_eegmat19": EEGMAT_19_CHANNELS,
         "siena13_with_siena29": SIENA_29_CHANNELS,
         "attention10_with_attention26": ATTENTION_26_CHANNELS,
+        "erpcore12_with_erpcore28": ERPCORE_28_CHANNELS,
     }.get(args.completion_scope)
     if expected_target_ch_names is None:
         raise ValueError(f"Unsupported completion_scope: {args.completion_scope}")
@@ -859,6 +882,8 @@ def main(args, ds_init):
             model.siena29_channel_prototypes.copy_(prototypes)
         elif args.completion_scope == "attention10_with_attention26":
             model.attention26_channel_prototypes.copy_(prototypes)
+        elif args.completion_scope == "erpcore12_with_erpcore28":
+            model.erpcore28_channel_prototypes.copy_(prototypes)
         else:
             raise ValueError(f"Unsupported completion_scope: {args.completion_scope}")
 

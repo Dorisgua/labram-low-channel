@@ -139,6 +139,28 @@ ATTENTION_10_CHANNELS = [
 ]
 
 
+# ERP CORE simple_data.pt channel order after CSLP-AE preprocessing.
+# HEOG/VEOG are present in the source tensor but are excluded from the
+# LaBraM-compatible 28-channel target space because they are not in
+# standard_1020.
+ERPCORE_30_CHANNELS = [
+    "FP1", "F3", "F7", "FC3", "C3", "C5", "P3", "P7",
+    "PO7", "PO3", "O1", "OZ", "PZ", "CPZ", "FP2", "FZ",
+    "F4", "F8", "FC4", "FCZ", "CZ", "C4", "C6", "P4",
+    "P8", "PO8", "PO4", "O2", "HEOG", "VEOG",
+]
+
+ERPCORE_28_CHANNELS = [
+    channel for channel in ERPCORE_30_CHANNELS
+    if channel not in {"HEOG", "VEOG"}
+]
+
+ERPCORE_12_CHANNELS = [
+    "FP1", "FP2", "F3", "F4", "F7", "F8",
+    "C3", "C4", "P3", "P4", "O1", "O2",
+]
+
+
 # OpenNeuro ds005416 24-channel subset retained for older artifacts.
 FATIG_24_CHANNELS = [
     "FP1", "FP2", "AF3", "AF4", "F7", "FZ", "F8", "FC5",
