@@ -3,10 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-LABRAM_BASE_ROOT="${LABRAM_BASE_ROOT:-${PROJECT_ROOT}/../LabraM-Git-Diff}"
+LABRAM_BASE_ROOT="${LABRAM_BASE_ROOT:-${PROJECT_ROOT}}"
 LABRAM_BASE_ROOT="$(cd "${LABRAM_BASE_ROOT}" && pwd)"
 export LABRAM_BASE_ROOT
-export PYTHONPATH="${PROJECT_ROOT}:${LABRAM_BASE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 PYTHON="${PYTHON:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/python}"
 RUN_PREFIX="${RUN_PREFIX:?wrapper must set RUN_PREFIX}"
@@ -37,7 +37,7 @@ RECON_WEIGHT="${RECON_WEIGHT:-0}"
 MISSING_MSE_WEIGHT="${MISSING_MSE_WEIGHT:-0}"
 SAMPLING="${SAMPLING:-cslpae}"
 
-DATA_PATH="${DATA_PATH:-${PROJECT_ROOT}/../CSLP-AE/data_preparation/simple_data.pt}"
+DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt}"
 CNN_CHECKPOINT="${CNN_CHECKPOINT:-${LABRAM_BASE_ROOT}/checkpoints/labram-base.pth}"
 PROTOTYPE_CHECKPOINT="${PROTOTYPE_CHECKPOINT:-${LABRAM_BASE_ROOT}/docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth}"
 SAMPLING_RATE="${SAMPLING_RATE:-200}"

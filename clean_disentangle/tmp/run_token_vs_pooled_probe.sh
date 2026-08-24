@@ -2,8 +2,8 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-LABRAM_BASE_ROOT="${LABRAM_BASE_ROOT:-${PROJECT_ROOT}/../LabraM-Git-Diff}"
-export PYTHONPATH="${PROJECT_ROOT}:${LABRAM_BASE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+LABRAM_BASE_ROOT="${LABRAM_BASE_ROOT:-${PROJECT_ROOT}}"
+export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 PYTHON="${PYTHON:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/python}"
 CHECKPOINT="${CHECKPOINT:?set CHECKPOINT to a Stage1 checkpoint}"
 OUTPUT_DIR="${OUTPUT_DIR:?set OUTPUT_DIR for this diagnostic}"

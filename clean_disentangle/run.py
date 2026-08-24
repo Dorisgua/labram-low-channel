@@ -777,11 +777,10 @@ def train_erpcore(
 
 
 def get_args() -> argparse.Namespace:
-    default_legacy = Path(__file__).resolve().parents[2] / "LabraM-Git-Diff"
-    default_data = Path(__file__).resolve().parents[2] / "CSLP-AE/data_preparation/simple_data.pt"
+    repo_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("inspect", "train"), default="inspect")
-    parser.add_argument("--legacy-root", type=Path, default=default_legacy)
+    parser.add_argument("--legacy-root", type=Path, default=repo_root)
     parser.add_argument("--cnn-checkpoint", type=Path, default=None)
     parser.add_argument("--prototype-checkpoint", type=Path, default=None)
     parser.add_argument("--spec", choices=sorted(SPEC_PRESETS), default=None)
@@ -813,7 +812,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--run-name", default="")
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--dataset", choices=("erpcore",), default="erpcore")
-    parser.add_argument("--data-path", type=Path, default=default_data)
+    parser.add_argument("--data-path", type=Path, default=None)
     parser.add_argument("--sampling-rate", type=int, default=200)
     parser.add_argument(
         "--norm-method",
@@ -867,6 +866,8 @@ def main() -> None:
             raise ValueError("--output-dir is required in train mode")
         if not args.run_name:
             raise ValueError("--run-name is required in train mode")
+        if args.data_path is None:
+            raise ValueError("--data-path is required in train mode")
         train_erpcore(
             args,
             spec,

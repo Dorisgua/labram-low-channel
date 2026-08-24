@@ -12,7 +12,6 @@ import csv
 import json
 import math
 import random
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -22,19 +21,12 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from clean_disentangle.modeling import ComponentMode, CompositionMode
-from clean_disentangle.prototype import PrototypeProvider, select_positions
+from clean_disentangle.prototype import PrototypeProvider
 
 
+# 四组对照：真实28通道、仅12个观测通道、固定原型补全、Stage1动态补全。
 MODES = ("full", "observed_only", "prototype", "dynamic")
 DEFAULT_STAGE1 = Path("outputs/missing_prototype_d/missing_prototype_d_seed0_20260818_143337")
-
-
-def add_legacy_root(root: Path) -> None:
-    root = root.expanduser().resolve()
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-    if not (root / "modeling_finetune.py").is_file():
-        raise FileNotFoundError(f"LaBraM source not found: {root}")
 
 
 def seed_everything(seed: int) -> None:
@@ -54,6 +46,7 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def load_backbone(backbone: nn.Module, checkpoint_path: Path) -> None:
+    """把不同保存格式的 LaBraM 预训练权重统一加载到 Stage2 backbone。"""
     import utils
 
     payload = torch.load(checkpoint_path, map_location="cpu")
@@ -65,6 +58,7 @@ def load_backbone(backbone: nn.Module, checkpoint_path: Path) -> None:
                 break
     if not isinstance(source, dict):
         raise TypeError(f"checkpoint has no state_dict: {checkpoint_path}")
+    # 兼容预训练 checkpoint 中以 student. 开头的参数名。
     student = {
         key[len("student.") :]: value
         for key, value in source.items()
@@ -74,6 +68,7 @@ def load_backbone(backbone: nn.Module, checkpoint_path: Path) -> None:
         source = student
     expected = backbone.state_dict()
     source = dict(source)
+    # 预训练分类头与 ERP-Core 12 分类不匹配时，不加载旧分类头。
     for key in ("head.weight", "head.bias"):
         if key in source and key in expected and tuple(source[key].shape) != tuple(expected[key].shape):
             source.pop(key)
@@ -85,14 +80,16 @@ def load_backbone(backbone: nn.Module, checkpoint_path: Path) -> None:
 
 
 def patch_tokens(backbone: nn.Module, eeg: torch.Tensor, expected_channels: int, *, patch_size: int = 200, num_t: int = 1, trainable: bool = False) -> torch.Tensor:
+    """将 EEG 从 [B,C,200] 转为 LaBraM token [B,C,embed_dim]。"""
     if eeg.ndim == 3:
         if eeg.shape[-1] != patch_size * num_t:
             raise ValueError(f"unexpected EEG length: {tuple(eeg.shape)}")
         eeg = eeg.reshape(eeg.shape[0], eeg.shape[1], num_t, patch_size)
     if eeg.ndim != 4 or eeg.shape[1] != expected_channels:
         raise ValueError(f"expected [B,{expected_channels},{num_t},{patch_size}], got {tuple(eeg.shape)}")
+    # 只有显式解冻 CNN 时才保留 patch_embed 的梯度。
     if trainable and torch.is_grad_enabled():
-        tokens = backbone.patch_embed(eeg)
+        tokens = backbone.patch_embed(eeg) #交给LaBraM 的 TemporalConv
     else:
         with torch.no_grad():
             tokens = backbone.patch_embed(eeg)
@@ -103,6 +100,7 @@ def patch_tokens(backbone: nn.Module, eeg: torch.Tensor, expected_channels: int,
 
 
 def load_prototypes(path: Path, expected_names: tuple[str, ...]) -> tuple[PrototypeProvider, list[int]]:
+    """加载固定通道原型，并严格检查28通道名称和顺序。"""
     payload = torch.load(path, map_location="cpu")
     names = tuple(str(value).strip().upper() for value in payload["ch_names"])
     if names != expected_names:
@@ -116,33 +114,42 @@ def load_prototypes(path: Path, expected_names: tuple[str, ...]) -> tuple[Protot
     return PrototypeProvider(payload["channel_prototypes"], channel_names=names), [int(v) for v in indices]
 
 
-def build_stage1_dynamic(config: dict[str, Any], checkpoint: Path):
+def build_stage1_dynamic(
+    config: dict[str, Any],
+    checkpoint: Path,
+    *,
+    cnn_checkpoint: Path,
+    prototype_checkpoint: Path,
+):
+    """恢复并冻结 Stage1；它只生成缺失通道 token，不参与 Stage2 更新。"""
     from clean_disentangle.modeling import MISSING_PROTOTYPE_SPEC
     from clean_disentangle.run import build_erpcore_reconstruction_model
 
+    # dynamic 只接受 Missing + Prototype + D_sub + D_task 的 Stage1 配置。
     expected = ("missing", "prototype", "prototype", "identity", "sum")
     actual = tuple(config.get(key) for key in ("scope", "missing_fill", "output_base", "component_mode", "composition_mode"))
     if actual != expected:
         raise RuntimeError(f"dynamic requires Stage1 C config, got {actual}")
+    repo_root = Path(__file__).resolve().parents[2]
     model = build_erpcore_reconstruction_model(
-        legacy_root=Path(config["legacy_root"]),
-        cnn_checkpoint=Path(config["cnn_checkpoint"]),
-        prototype_checkpoint=Path(config["prototype_checkpoint"]),
+        legacy_root=repo_root,
+        cnn_checkpoint=cnn_checkpoint,
+        prototype_checkpoint=prototype_checkpoint,
         spec=MISSING_PROTOTYPE_SPEC,
         seed=int(config.get("seed", 0)),
         unfreeze_cnn=False,
     )
     payload = torch.load(checkpoint, map_location="cpu")
     model.load_state_dict(payload["model"], strict=True)
+    # Stage2 只能使用 Stage1 的输出，不能反向更新 Stage1。
     for parameter in model.parameters():
         parameter.requires_grad = False
     model.eval()
-    model.patch_embed.eval()
-    model.stable_core.eval()
     return model
 
 
 def formal_probe_match(checkpoint: Path, formal_checkpoint: Path | None = None) -> None:
+    """可选的复现实验检查：确保 Stage2 使用正式 probe 对应的 Stage1 权重。"""
     if formal_checkpoint is None:
         probe_config = checkpoint.parent.parent / "evaluation/probe/probe_config.json"
         if not probe_config.is_file():
@@ -159,7 +166,18 @@ def formal_probe_match(checkpoint: Path, formal_checkpoint: Path | None = None) 
 
 
 class TransformerClassifier(nn.Module):
-    def __init__(self, backbone: nn.Module, input_mode: str, channel_positions: list[int], *, dynamic_model=None, prototype_provider=None, prototype_positions=None, last_n_blocks: int = 12, train_cnn: bool = False):
+    """将四种通道输入统一转换为 token，再用 LaBraM 完成12分类。"""
+    def __init__(
+        self,
+        backbone: nn.Module,
+        input_mode: str,
+        channel_positions: list[int],
+        *,
+        dynamic_model=None,
+        prototype_provider=None,
+        last_n_blocks: int = 12,
+        train_cnn: bool = False,
+    ):
         super().__init__()
         if input_mode not in MODES:
             raise ValueError(f"unknown input mode: {input_mode}")
@@ -168,16 +186,13 @@ class TransformerClassifier(nn.Module):
         self.channel_positions = list(channel_positions)
         self.dynamic_model = dynamic_model
         self.prototype_provider = prototype_provider
-        self.prototype_positions = prototype_positions
-        self.full_channels = 28
-        self.observed_channels = 12
-        self.num_t = 1
         self.last_n_blocks = int(last_n_blocks)
         self.train_cnn = bool(train_cnn)
         if self.input_mode == "dynamic" and self.train_cnn:
             raise ValueError("dynamic mode uses the frozen Stage1 TemporalConv; TRAIN_CNN must be 0")
         if not 0 <= self.last_n_blocks <= len(backbone.blocks):
             raise ValueError(f"last_n_blocks must be in [0,{len(backbone.blocks)}]")
+        # 先全部冻结，再只开放实验指定的模块，便于审计真实训练范围。
         for parameter in self.parameters():
             parameter.requires_grad = False
         if self.train_cnn:
@@ -186,6 +201,7 @@ class TransformerClassifier(nn.Module):
         if self.dynamic_model is not None:
             for parameter in self.dynamic_model.parameters():
                 parameter.requires_grad = False
+        # 仅微调最后 N 个 Transformer block。
         for block in backbone.blocks[-self.last_n_blocks:] if self.last_n_blocks else []:
             for parameter in block.parameters():
                 parameter.requires_grad = True
@@ -196,6 +212,7 @@ class TransformerClassifier(nn.Module):
                 parameter.requires_grad = True
         from modeling_adabrain import LinearWithConstraint
 
+        # 分类头展平所有 token（包括 CLS），不是只读取 CLS。
         self.num_input_tokens = 12 if input_mode == "observed_only" else 28
         self.classifier_input_dim = (self.num_input_tokens + 1) * int(backbone.embed_dim)
         self.task_head = LinearWithConstraint(self.classifier_input_dim, 12, max_norm=1.0, flatten=True)
@@ -203,6 +220,7 @@ class TransformerClassifier(nn.Module):
             parameter.requires_grad = True
 
     def train(self, mode: bool = True):
+        """切换训练模式，同时让冻结的 Stage1、CNN 和早期 block 保持 eval。"""
         super().train(mode)
         if self.dynamic_model is not None:
             self.dynamic_model.eval()
@@ -214,17 +232,21 @@ class TransformerClassifier(nn.Module):
         return self
 
     def _dynamic_complete(self, x_obs: torch.Tensor) -> torch.Tensor:
+        """用冻结 Stage1 将12个观测 token 动态补成28个 token。"""
         with torch.no_grad():
             corrector = self.dynamic_model
+            # h_obs: [B,12,200]；p_miss: [B,16,200]。
             h_obs = corrector.patch_tokens(x_obs, expected_channels=12)
             observed = corrector.observed_token_positions.to(x_obs.device)
             missing = corrector.missing_token_positions.to(x_obs.device)
             provider = corrector.prototype_provider
             p_miss = provider.get_missing(x_obs.shape[0], missing_channel_positions=corrector.missing_channel_positions, num_t=1, device=x_obs.device, dtype=h_obs.dtype)
+            # 先用观测 token 和固定 prototype 组成 [B,28,200] 上下文。
             context = h_obs.new_zeros(x_obs.shape[0], 28, corrector.stable_core.embed_dim)
             context = context.index_copy(1, observed, h_obs).index_copy(1, missing, p_miss)
             rep = corrector.stable_core.encode_tokens(context)
             components = corrector.build_components(rep, missing, ComponentMode.IDENTITY)
+            # 缺失通道预测 = prototype + D_sub + D_task。
             pred = corrector.compose_prediction(
                 p_miss,
                 components["d_sub"],
@@ -235,12 +257,14 @@ class TransformerClassifier(nn.Module):
             return complete
 
     def build_transformer_input(self, x: torch.Tensor) -> torch.Tensor:
+        """按实验模式构造12或28个 Transformer 输入 token。"""
         if self.input_mode == "full":
             return patch_tokens(self.backbone, x, 28, trainable=self.train_cnn)
         if self.input_mode == "observed_only":
             return patch_tokens(self.backbone, x, 12, trainable=self.train_cnn)
         if self.input_mode == "dynamic":
             return self._dynamic_complete(x)
+        # prototype 模式：保留12个真实观测 token，用固定原型填入16个缺失位置。
         h_obs = patch_tokens(self.backbone, x, 12, trainable=self.train_cnn)
         observed = torch.as_tensor(self._observed_positions, dtype=torch.long, device=x.device)
         missing = torch.as_tensor(self._missing_positions, dtype=torch.long, device=x.device)
@@ -254,6 +278,7 @@ class TransformerClassifier(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         tokens = self.build_transformer_input(x)
         batch_size, num_tokens, _ = tokens.shape
+        # observed_only 为13个 token；其余模式为29个 token（均包含 CLS）。
         x = torch.cat((self.backbone.cls_token.expand(batch_size, -1, -1), tokens), dim=1)
         indices = torch.as_tensor(self.channel_positions, dtype=torch.long, device=x.device)
         if self.backbone.pos_embed is not None:
@@ -263,6 +288,7 @@ class TransformerClassifier(nn.Module):
         if self.backbone.time_embed is not None:
             x[:, 1:] = x[:, 1:] + self.backbone.time_embed[:, :1, :].unsqueeze(1).expand(batch_size, num_tokens, -1, -1).flatten(1, 2)
         x = self.backbone.pos_drop(x)
+        # 所有 block 都参与前向；只有最后 last_n_blocks 保存梯度并更新。
         for block in self.backbone.blocks:
             x = block(x, rel_pos_bias=None)
         x = self.backbone.norm(x)
@@ -272,7 +298,7 @@ class TransformerClassifier(nn.Module):
 
 
 def make_model(args: argparse.Namespace, stage1_config: dict[str, Any] | None):
-    add_legacy_root(args.legacy_root)
+    """组装 Stage2 backbone、原型提供器和可选的冻结 Stage1。"""
     import modeling_finetune  # noqa: F401
     from timm.models import create_model
     from Channels_definition import ERPCORE_12_CHANNELS, ERPCORE_28_CHANNELS
@@ -280,13 +306,13 @@ def make_model(args: argparse.Namespace, stage1_config: dict[str, Any] | None):
     backbone = create_model("labram_base_patch200_200", pretrained=False, num_classes=12, drop_rate=0.0, drop_path_rate=0.1, attn_drop_rate=0.0, drop_block_rate=None, use_mean_pooling=True, init_scale=0.001, use_rel_pos_bias=False, use_abs_pos_emb=True, init_values=0.1, qkv_bias=False)
     load_backbone(backbone, args.labram_checkpoint)
     full_names = tuple(ERPCORE_28_CHANNELS)
+    # 将12个观测通道映射到固定的28通道顺序中。
     observed_positions = [full_names.index(name) for name in ERPCORE_12_CHANNELS]
     missing_positions = [i for i, name in enumerate(full_names) if name not in ERPCORE_12_CHANNELS]
     prototype_provider = None
     target_indices = None
-    prototype_path = args.prototype_checkpoint
     if args.input_mode in ("prototype", "dynamic"):
-        prototype_provider, target_indices = load_prototypes(prototype_path, full_names)
+        prototype_provider, target_indices = load_prototypes(args.prototype_checkpoint, full_names)
     if args.input_mode == "observed_only":
         import utils
         channel_positions = utils.get_input_chans(list(ERPCORE_12_CHANNELS))
@@ -297,16 +323,28 @@ def make_model(args: argparse.Namespace, stage1_config: dict[str, Any] | None):
         channel_positions = target_indices or []
     dynamic_model = None
     if args.input_mode == "dynamic":
-        if args.require_probe_match:
-            formal_probe_match(args.stage1_checkpoint, args.formal_probe_checkpoint)
-        dynamic_model = build_stage1_dynamic(stage1_config, args.stage1_checkpoint)
-    model = TransformerClassifier(backbone, args.input_mode, channel_positions, dynamic_model=dynamic_model, prototype_provider=prototype_provider, prototype_positions=target_indices, last_n_blocks=args.last_n_blocks, train_cnn=args.train_cnn)
+        dynamic_model = build_stage1_dynamic(
+            stage1_config,
+            args.stage1_checkpoint,
+            cnn_checkpoint=args.labram_checkpoint,
+            prototype_checkpoint=args.prototype_checkpoint,
+        )
+    model = TransformerClassifier(
+        backbone,
+        args.input_mode,
+        channel_positions,
+        dynamic_model=dynamic_model,
+        prototype_provider=prototype_provider,
+        last_n_blocks=args.last_n_blocks,
+        train_cnn=args.train_cnn,
+    )
     model._observed_positions = observed_positions
     model._missing_positions = missing_positions
     return model, full_names, ERPCORE_12_CHANNELS
 
 
 def validate_dynamic_metadata(args: argparse.Namespace, config: dict[str, Any]) -> None:
+    """在加载权重前检查 Stage1 的模式、维度和通道顺序。"""
     expected_spec = {
         "scope": "missing",
         "missing_fill": "prototype",
@@ -333,6 +371,7 @@ def validate_dynamic_metadata(args: argparse.Namespace, config: dict[str, Any]) 
 
 
 def print_resolved_summary(args: argparse.Namespace, model: nn.Module, output_dir: Path) -> None:
+    """训练前打印最终生效的模式、冻结范围、超参数和输出目录。"""
     stage1_used = args.input_mode == "dynamic"
     prototype_used = args.input_mode in ("prototype", "dynamic")
     blocks = list(range(max(0, len(model.backbone.blocks) - args.last_n_blocks), len(model.backbone.blocks)))
@@ -361,9 +400,11 @@ def print_resolved_summary(args: argparse.Namespace, model: nn.Module, output_di
 
 @torch.no_grad()
 def evaluate(model, loader, device):
+    """在验证集或测试集上计算四个分类指标。"""
     import utils
     model.eval(); outputs, targets = [], []
     for batch in loader:
+        # 只有 full 基线读取真实28通道；其余模式始终只读取12通道 x_obs。
         source = batch["x_full"] if model.input_mode == "full" else batch["x_obs"]
         outputs.append(model(source.to(device)).cpu())
         targets.append(batch["label"].cpu())
@@ -372,12 +413,16 @@ def evaluate(model, loader, device):
 
 
 def main(args: argparse.Namespace) -> None:
+    """完成配置检查、模型构建、训练、评估和 checkpoint 保存。"""
     seed_everything(args.seed)
+    if args.data_path is None:
+        raise ValueError("--data-path is required; keep ERP-Core data outside the repo")
     stage1_config = load_json(args.stage1_config) if args.input_mode == "dynamic" else None
     if args.input_mode == "dynamic":
         validate_dynamic_metadata(args, stage1_config)
         if args.require_probe_match:
             formal_probe_match(args.stage1_checkpoint, args.formal_probe_checkpoint)
+    # dry-run 只检查关键文件是否存在，不读取数据，也不构建模型。
     if args.dry_run:
         for required in (args.labram_checkpoint, args.data_path):
             if not required.exists():
@@ -391,6 +436,7 @@ def main(args: argparse.Namespace) -> None:
     model, full_names, observed_names = make_model(args, stage1_config)
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     model.to(device)
+    # CNN 使用较小学习率；其他可训练参数使用主学习率。
     trainable = [(name, p) for name, p in model.named_parameters() if p.requires_grad]
     cnn_params = [p for name, p in trainable if name.startswith("backbone.patch_embed.")]
     other_params = [p for name, p in trainable if not name.startswith("backbone.patch_embed.")]
@@ -398,20 +444,17 @@ def main(args: argparse.Namespace) -> None:
     if cnn_params:
         groups.append({"params": cnn_params, "lr": args.lr * args.cnn_lr_mult, "base_lr": args.lr * args.cnn_lr_mult})
     optimizer = torch.optim.AdamW(groups, weight_decay=args.weight_decay, eps=1e-8)
+    # 防止 requires_grad=True 的参数漏加或重复加入优化器。
     optimizer_ids = {id(parameter) for group in optimizer.param_groups for parameter in group["params"]}
     trainable_ids = {id(parameter) for _, parameter in trainable}
     if optimizer_ids != trainable_ids:
         raise RuntimeError("optimizer parameters do not exactly match requires_grad=True parameters")
     trainable_names = [name for name, _ in trainable]
-    print(f"MODE={args.input_mode}")
     print_resolved_summary(args, model, args.output_dir)
-    print(f"num_transformer_input_tokens={model.num_input_tokens}")
-    print(f"classifier_input_dim={model.classifier_input_dim}")
-    print(f"transformer_total_blocks={len(model.backbone.blocks)}")
-    print(f"trainable_last_n={args.last_n_blocks}")
     print(f"Trainable parameter names: {json.dumps(trainable_names)}")
     print(f"Trainable parameter count: {sum(p.numel() for _, p in trainable)}")
     print(f"Frozen parameter count: {sum(p.numel() for p in model.parameters() if not p.requires_grad)}")
+    # audit-only 真正读取一个测试 batch 并前向一次，但不训练。
     if args.audit_only:
         from data_processor.erpcore_cslp import prepare_ERPCORE_cslp_dataset
         _, test_dataset, _ = prepare_ERPCORE_cslp_dataset(args.data_path, sampling_rate=200, normalize_method="z_score")
@@ -421,6 +464,7 @@ def main(args: argparse.Namespace) -> None:
         print(f"AUDIT_PASS raw={tuple(source.shape)} logits={tuple(logits.shape)}")
         return
     from data_processor.erpcore_cslp import prepare_ERPCORE_cslp_dataset
+    # 数据函数的返回顺序是 train、test、val，请勿按常见的 train、val、test 理解。
     train_ds, test_ds, val_ds = prepare_ERPCORE_cslp_dataset(args.data_path, sampling_rate=200, normalize_method="z_score")
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
@@ -432,6 +476,7 @@ def main(args: argparse.Namespace) -> None:
     fields = ["epoch", "train_loss", "val_accuracy", "val_balanced_accuracy", "val_cohen_kappa", "val_f1_weighted", "test_accuracy", "test_balanced_accuracy", "test_cohen_kappa", "test_f1_weighted"]
     with (args.output_dir / "metrics.csv").open("w", newline="", encoding="utf-8") as handle: csv.DictWriter(handle, fieldnames=fields).writeheader()
     start_epoch = 0
+    # resume 同时恢复模型、优化器和起始 epoch。
     if args.resume:
         payload = torch.load(args.resume, map_location="cpu")
         resume_config = payload.get("config", {})
@@ -443,6 +488,7 @@ def main(args: argparse.Namespace) -> None:
         start_epoch = int(payload.get("epoch", -1)) + 1
         print(f"Resumed from {args.resume} at epoch {start_epoch}")
     def save(path, epoch): torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(), "epoch": epoch, "config": resolved}, path)
+    # 每个 epoch：训练 → 验证/测试 → 保存 last 和两个验证集最优 checkpoint。
     for epoch in range(start_epoch, args.epochs):
         model.train(True); losses=[]
         lr = args.lr * (float(epoch+1)/max(args.warmup_epochs,1) if epoch < args.warmup_epochs else 0.5*(1+math.cos(math.pi*(epoch-args.warmup_epochs)/max(args.epochs-args.warmup_epochs,1))))
@@ -458,8 +504,35 @@ def main(args: argparse.Namespace) -> None:
 
 
 def get_args():
-    parser=argparse.ArgumentParser(description=__doc__); root=Path(__file__).resolve().parents[2]; stage1=root/DEFAULT_STAGE1
-    parser.add_argument("--input-mode", choices=MODES, default="dynamic"); parser.add_argument("--exp-name", default="stage2_default"); parser.add_argument("--stage1-checkpoint",type=Path,default=stage1/"checkpoints/checkpoint-last.pth"); parser.add_argument("--stage1-config",type=Path,default=stage1/"config.json"); parser.add_argument("--labram-checkpoint",type=Path,default=Path("../LabraM-Git-Diff/checkpoints/labram-base.pth").resolve()); parser.add_argument("--prototype-checkpoint",type=Path,default=Path("../LabraM-Git-Diff/docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth").resolve()); parser.add_argument("--data-path",type=Path,default=root/"../CSLP-AE/data_preparation/simple_data.pt"); parser.add_argument("--output-dir",type=Path,default=root/"outputs/stage2"); parser.add_argument("--legacy-root",type=Path,default=root/"../LabraM-Git-Diff"); parser.add_argument("--device",default="cuda"); parser.add_argument("--seed",type=int,default=0); parser.add_argument("--epochs",type=int,default=50); parser.add_argument("--batch-size",type=int,default=64); parser.add_argument("--num-workers",type=int,default=4); parser.add_argument("--lr",type=float,default=5e-5); parser.add_argument("--cnn-lr-mult",type=float,default=0.1); parser.add_argument("--train-cnn",action="store_true"); parser.add_argument("--weight-decay",type=float,default=0.05); parser.add_argument("--warmup-epochs",type=int,default=5); parser.add_argument("--last-n-blocks",type=int,default=12); parser.add_argument("--audit-only",action="store_true"); parser.add_argument("--dry-run",action="store_true"); parser.add_argument("--resume",type=Path,default=None); parser.add_argument("--require-probe-match",action="store_true"); parser.add_argument("--formal-probe-checkpoint",type=Path,default=None); return parser.parse_args()
+    """定义命令行参数；Shell 启动脚本会提供数据路径和实验默认值。"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    root = Path(__file__).resolve().parents[2]
+    stage1 = root / DEFAULT_STAGE1
+    parser.add_argument("--input-mode", choices=MODES, default="dynamic")
+    parser.add_argument("--exp-name", default="stage2_default")
+    parser.add_argument("--stage1-checkpoint", type=Path, default=stage1 / "checkpoints/checkpoint-last.pth")
+    parser.add_argument("--stage1-config", type=Path, default=stage1 / "config.json")
+    parser.add_argument("--labram-checkpoint", type=Path, default=root / "checkpoints/labram-base.pth")
+    parser.add_argument("--prototype-checkpoint", type=Path, default=root / "docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth")
+    parser.add_argument("--data-path", type=Path, default=None)
+    parser.add_argument("--output-dir", type=Path, default=root / "outputs/stage2")
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--lr", type=float, default=5e-5)
+    parser.add_argument("--cnn-lr-mult", type=float, default=0.1)
+    parser.add_argument("--train-cnn", action="store_true")
+    parser.add_argument("--weight-decay", type=float, default=0.05)
+    parser.add_argument("--warmup-epochs", type=int, default=5)
+    parser.add_argument("--last-n-blocks", type=int, default=12)
+    parser.add_argument("--audit-only", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--resume", type=Path, default=None)
+    parser.add_argument("--require-probe-match", action="store_true")
+    parser.add_argument("--formal-probe-checkpoint", type=Path, default=None)
+    return parser.parse_args()
 
 
 if __name__ == "__main__": main(get_args())

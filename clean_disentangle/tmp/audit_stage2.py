@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 import torch
@@ -11,8 +10,6 @@ from torch.utils.data import DataLoader
 
 from clean_disentangle.stage2.train_stage2 import (
     MODES,
-    add_legacy_root,
-    build_stage1_dynamic,
     load_json,
     make_model,
     patch_tokens,
@@ -33,10 +30,9 @@ def args_for_mode(base: argparse.Namespace, mode: str) -> argparse.Namespace:
 def main() -> None:
     parser = argparse.ArgumentParser()
     root = Path(__file__).resolve().parents[2]
-    parser.add_argument("--data-path", type=Path, default=root / "../CSLP-AE/data_preparation/simple_data.pt")
-    parser.add_argument("--legacy-root", type=Path, default=root / "../LabraM-Git-Diff")
-    parser.add_argument("--labram-checkpoint", type=Path, default=root / "../LabraM-Git-Diff/checkpoints/labram-base.pth")
-    parser.add_argument("--prototype-checkpoint", type=Path, default=root / "../LabraM-Git-Diff/docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth")
+    parser.add_argument("--data-path", type=Path, required=True)
+    parser.add_argument("--labram-checkpoint", type=Path, default=root / "checkpoints/labram-base.pth")
+    parser.add_argument("--prototype-checkpoint", type=Path, default=root / "docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth")
     stage1_dir = root / "outputs/missing_prototype_d/missing_prototype_d_seed0_20260818_143337"
     parser.add_argument("--stage1-checkpoint", type=Path, default=stage1_dir / "checkpoints/checkpoint-last.pth")
     parser.add_argument("--stage1-config", type=Path, default=stage1_dir / "config.json")
@@ -44,8 +40,6 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--last-n-blocks", type=int, default=12)
     ns = parser.parse_args()
-
-    add_legacy_root(ns.legacy_root)
 
     from data_processor.erpcore_cslp import prepare_ERPCORE_cslp_dataset
 

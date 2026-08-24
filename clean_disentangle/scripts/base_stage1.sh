@@ -5,10 +5,10 @@ set -euo pipefail
 # single Stage1 execution implementation; this file owns its public defaults.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-LABRAM_BASE_ROOT="${LABRAM_BASE_ROOT:-${PROJECT_ROOT}/../LabraM-Git-Diff}"
+LABRAM_BASE_ROOT="${LABRAM_BASE_ROOT:-${PROJECT_ROOT}}"
 LABRAM_BASE_ROOT="$(cd "${LABRAM_BASE_ROOT}" && pwd)"
-export LABRAM_BASE_ROOT
-export PYTHONPATH="${PROJECT_ROOT}:${LABRAM_BASE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+exporexport PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"t LABRAM_BASE_ROOT
+
 
 EXP_NAME="${EXP_NAME:-stage1_default}"
 RUN_PREFIX="${RUN_PREFIX:-${EXP_NAME}}"
@@ -37,7 +37,7 @@ OPT_EPS="${OPT_EPS:-1e-8}"
 UNFREEZE_CNN="${UNFREEZE_CNN:-0}"
 CNN_LR_MULT="${CNN_LR_MULT:-0.1}"
 SAMPLING="${SAMPLING:-cslpae}"
-DATA_PATH="${DATA_PATH:-${PROJECT_ROOT}/../CSLP-AE/data_preparation/simple_data.pt}"
+DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt}"
 CNN_CHECKPOINT="${CNN_CHECKPOINT:-${LABRAM_BASE_ROOT}/checkpoints/labram-base.pth}"
 PROTOTYPE_CHECKPOINT="${PROTOTYPE_CHECKPOINT:-${LABRAM_BASE_ROOT}/docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth}"
 SAMPLING_RATE="${SAMPLING_RATE:-200}"
