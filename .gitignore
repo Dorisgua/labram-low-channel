@@ -1,8 +1,37 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local Python environments and packaging outputs
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Large model checkpoints and datasets
 checkpoints/
-log/
-run_logs/
+data/
 *.pth
 *.pt
 *.pkl
-__pycache__/
-*.pyc
+
+# Keep the small, required channel-prototype assets under version control.
+!docs/prototypes/*.pth
+
+# Training and evaluation outputs
+outputs/
+log/
+run_logs/
+*.log
+*.pid
+nohup.out
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+*~

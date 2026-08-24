@@ -738,11 +738,20 @@ class TUABLoader(torch.utils.data.Dataset):
     
 
 class TUEVLoader(torch.utils.data.Dataset):
-    def __init__(self, root, files, sampling_rate=200):
+    def __init__(self, root, files, sampling_rate=200, channel_indices=None, channel_names=None):
         self.root = root
         self.files = files
         self.default_rate = 200
         self.sampling_rate = sampling_rate
+        if channel_indices is not None and channel_names is not None:
+            raise ValueError("Pass either channel_indices or channel_names, not both")
+        if channel_names is not None:
+            from Channels_definition import TUEV_23_CHANNELS
+            unknown = [name for name in channel_names if name not in TUEV_23_CHANNELS]
+            if unknown:
+                raise ValueError(f"Unknown TUEV channel names: {unknown}")
+            channel_indices = [TUEV_23_CHANNELS.index(name) for name in channel_names]
+        self.channel_indices = channel_indices
 
     def __len__(self):
         return len(self.files)
@@ -750,14 +759,16 @@ class TUEVLoader(torch.utils.data.Dataset):
     def __getitem__(self, index):
         sample = pickle.load(open(os.path.join(self.root, self.files[index]), "rb"))
         X = sample["signal"]
+        if self.channel_indices is not None:
+            X = X[self.channel_indices]
         if self.sampling_rate != self.default_rate:
             X = resample(X, 5 * self.sampling_rate, axis=-1)
         Y = int(sample["label"][0] - 1)
         X = torch.FloatTensor(X)
         return X, Y
-    
 
-def prepare_TUEV_dataset(root):
+
+def prepare_TUEV_dataset(root, channel_indices=None, channel_names=None):
     # set random seed
     seed = 4523
     np.random.seed(seed)
@@ -768,16 +779,16 @@ def prepare_TUEV_dataset(root):
 
     # prepare training and test data loader
     train_dataset = TUEVLoader(
-        os.path.join(
-            root, "processed_train"), train_files
+        os.path.join(root, "processed_train"), train_files,
+        channel_indices=channel_indices, channel_names=channel_names
     )
     test_dataset = TUEVLoader(
-        os.path.join(
-            root, "processed_test"), test_files
+        os.path.join(root, "processed_test"), test_files,
+        channel_indices=channel_indices, channel_names=channel_names
     )
     val_dataset = TUEVLoader(
-        os.path.join(
-            root, "processed_eval"), val_files
+        os.path.join(root, "processed_eval"), val_files,
+        channel_indices=channel_indices, channel_names=channel_names
     )
     print(len(train_files), len(val_files), len(test_files))
     return train_dataset, test_dataset, val_dataset

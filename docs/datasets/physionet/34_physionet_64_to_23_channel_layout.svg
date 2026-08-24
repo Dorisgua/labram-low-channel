@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="980" viewBox="0 0 1180 980" role="img" aria-labelledby="title desc">
+  <title id="title">PhysioNet EEGMMIDB 64 到 23 导联建议</title>
+  <desc id="desc">头顶俯视图。绿色为建议保留的二十三个感觉运动区导联，红色虚线为建议掩盖的四十一个导联。</desc>
+  <defs>
+    <style>
+      .title { font: 700 27px sans-serif; fill: #172033; }
+      .subtitle { font: 15px sans-serif; fill: #4b5563; }
+      .head { fill: #fbfcfe; stroke: #60708a; stroke-width: 4; }
+      .feature { fill: none; stroke: #60708a; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .kept { fill: #d9f7e8; stroke: #16855b; stroke-width: 2.6; }
+      .masked { fill: #ffe4e1; stroke: #c54840; stroke-width: 2.2; stroke-dasharray: 4 3; }
+      .label { font: 700 10.5px sans-serif; fill: #172033; text-anchor: middle; dominant-baseline: middle; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 2; }
+      .panel-title { font: 700 18px sans-serif; fill: #172033; }
+      .panel-text { font: 14px sans-serif; fill: #334155; }
+      .panel-small { font: 12.5px sans-serif; fill: #475569; }
+      .axis { font: 13px sans-serif; fill: #667085; }
+      .row { font: 12px monospace; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1180" height="980" fill="#ffffff"/>
+  <text x="590" y="38" class="title" text-anchor="middle">PhysioNet EEGMMIDB：64 → 23 导联建议</text>
+  <text x="590" y="65" class="subtitle" text-anchor="middle">感觉运动核心布局；上方为鼻子，图左为左半球</text>
+
+  <!-- Head, nose, and ears -->
+  <ellipse cx="400" cy="505" rx="330" ry="395" class="head"/>
+  <path d="M365 116 L400 78 L435 116" class="feature"/>
+  <path d="M72 410 C30 420 30 565 74 575" class="feature"/>
+  <path d="M728 410 C770 420 770 565 726 575" class="feature"/>
+  <text x="76" y="930" class="axis">左半球</text>
+  <text x="672" y="930" class="axis">右半球</text>
+
+  <!-- FP -->
+  <g><circle cx="330" cy="155" r="18" class="masked"/><text x="330" y="155" class="label">FP1</text></g>
+  <g><circle cx="400" cy="145" r="18" class="masked"/><text x="400" y="145" class="label">FPZ</text></g>
+  <g><circle cx="470" cy="155" r="18" class="masked"/><text x="470" y="155" class="label">FP2</text></g>
+
+  <!-- AF -->
+  <g><circle cx="205" cy="215" r="18" class="masked"/><text x="205" y="215" class="label">AF7</text></g>
+  <g><circle cx="300" cy="205" r="18" class="masked"/><text x="300" y="205" class="label">AF3</text></g>
+  <g><circle cx="400" cy="200" r="18" class="masked"/><text x="400" y="200" class="label">AFZ</text></g>
+  <g><circle cx="500" cy="205" r="18" class="masked"/><text x="500" y="205" class="label">AF4</text></g>
+  <g><circle cx="595" cy="215" r="18" class="masked"/><text x="595" y="215" class="label">AF8</text></g>
+
+  <!-- F -->
+  <g><circle cx="125" cy="290" r="18" class="masked"/><text x="125" y="290" class="label">F7</text></g>
+  <g><circle cx="195" cy="275" r="18" class="masked"/><text x="195" y="275" class="label">F5</text></g>
+  <g><circle cx="265" cy="265" r="18" class="kept"/><text x="265" y="265" class="label">F3</text></g>
+  <g><circle cx="330" cy="258" r="18" class="masked"/><text x="330" y="258" class="label">F1</text></g>
+  <g><circle cx="400" cy="255" r="18" class="masked"/><text x="400" y="255" class="label">FZ</text></g>
+  <g><circle cx="470" cy="258" r="18" class="masked"/><text x="470" y="258" class="label">F2</text></g>
+  <g><circle cx="535" cy="265" r="18" class="kept"/><text x="535" y="265" class="label">F4</text></g>
+  <g><circle cx="605" cy="275" r="18" class="masked"/><text x="605" y="275" class="label">F6</text></g>
+  <g><circle cx="675" cy="290" r="18" class="masked"/><text x="675" y="290" class="label">F8</text></g>
+
+  <!-- FT / FC -->
+  <g><circle cx="110" cy="370" r="18" class="masked"/><text x="110" y="370" class="label">FT7</text></g>
+  <g><circle cx="180" cy="355" r="18" class="kept"/><text x="180" y="355" class="label">FC5</text></g>
+  <g><circle cx="250" cy="345" r="18" class="kept"/><text x="250" y="345" class="label">FC3</text></g>
+  <g><circle cx="325" cy="340" r="18" class="kept"/><text x="325" y="340" class="label">FC1</text></g>
+  <g><circle cx="400" cy="337" r="18" class="kept"/><text x="400" y="337" class="label">FCZ</text></g>
+  <g><circle cx="475" cy="340" r="18" class="kept"/><text x="475" y="340" class="label">FC2</text></g>
+  <g><circle cx="550" cy="345" r="18" class="kept"/><text x="550" y="345" class="label">FC4</text></g>
+  <g><circle cx="620" cy="355" r="18" class="kept"/><text x="620" y="355" class="label">FC6</text></g>
+  <g><circle cx="690" cy="370" r="18" class="masked"/><text x="690" y="370" class="label">FT8</text></g>
+
+  <!-- T / C -->
+  <g><circle cx="70" cy="465" r="18" class="masked"/><text x="70" y="465" class="label">T9</text></g>
+  <g><circle cx="120" cy="465" r="18" class="masked"/><text x="120" y="465" class="label">T7</text></g>
+  <g><circle cx="180" cy="465" r="18" class="kept"/><text x="180" y="465" class="label">C5</text></g>
+  <g><circle cx="245" cy="465" r="18" class="kept"/><text x="245" y="465" class="label">C3</text></g>
+  <g><circle cx="325" cy="465" r="18" class="kept"/><text x="325" y="465" class="label">C1</text></g>
+  <g><circle cx="400" cy="465" r="18" class="kept"/><text x="400" y="465" class="label">CZ</text></g>
+  <g><circle cx="475" cy="465" r="18" class="kept"/><text x="475" y="465" class="label">C2</text></g>
+  <g><circle cx="555" cy="465" r="18" class="kept"/><text x="555" y="465" class="label">C4</text></g>
+  <g><circle cx="620" cy="465" r="18" class="kept"/><text x="620" y="465" class="label">C6</text></g>
+  <g><circle cx="680" cy="465" r="18" class="masked"/><text x="680" y="465" class="label">T8</text></g>
+  <g><circle cx="730" cy="465" r="18" class="masked"/><text x="730" y="465" class="label">T10</text></g>
+
+  <!-- TP / CP -->
+  <g><circle cx="110" cy="560" r="18" class="masked"/><text x="110" y="560" class="label">TP7</text></g>
+  <g><circle cx="180" cy="575" r="18" class="kept"/><text x="180" y="575" class="label">CP5</text></g>
+  <g><circle cx="250" cy="585" r="18" class="kept"/><text x="250" y="585" class="label">CP3</text></g>
+  <g><circle cx="325" cy="590" r="18" class="kept"/><text x="325" y="590" class="label">CP1</text></g>
+  <g><circle cx="400" cy="593" r="18" class="kept"/><text x="400" y="593" class="label">CPZ</text></g>
+  <g><circle cx="475" cy="590" r="18" class="kept"/><text x="475" y="590" class="label">CP2</text></g>
+  <g><circle cx="550" cy="585" r="18" class="kept"/><text x="550" y="585" class="label">CP4</text></g>
+  <g><circle cx="620" cy="575" r="18" class="kept"/><text x="620" y="575" class="label">CP6</text></g>
+  <g><circle cx="690" cy="560" r="18" class="masked"/><text x="690" y="560" class="label">TP8</text></g>
+
+  <!-- P -->
+  <g><circle cx="125" cy="650" r="18" class="masked"/><text x="125" y="650" class="label">P7</text></g>
+  <g><circle cx="195" cy="665" r="18" class="masked"/><text x="195" y="665" class="label">P5</text></g>
+  <g><circle cx="265" cy="675" r="18" class="masked"/><text x="265" y="675" class="label">P3</text></g>
+  <g><circle cx="330" cy="682" r="18" class="masked"/><text x="330" y="682" class="label">P1</text></g>
+  <g><circle cx="400" cy="685" r="18" class="masked"/><text x="400" y="685" class="label">PZ</text></g>
+  <g><circle cx="470" cy="682" r="18" class="masked"/><text x="470" y="682" class="label">P2</text></g>
+  <g><circle cx="535" cy="675" r="18" class="masked"/><text x="535" y="675" class="label">P4</text></g>
+  <g><circle cx="605" cy="665" r="18" class="masked"/><text x="605" y="665" class="label">P6</text></g>
+  <g><circle cx="675" cy="650" r="18" class="masked"/><text x="675" y="650" class="label">P8</text></g>
+
+  <!-- PO -->
+  <g><circle cx="205" cy="740" r="18" class="masked"/><text x="205" y="740" class="label">PO7</text></g>
+  <g><circle cx="300" cy="750" r="18" class="masked"/><text x="300" y="750" class="label">PO3</text></g>
+  <g><circle cx="400" cy="755" r="18" class="masked"/><text x="400" y="755" class="label">POZ</text></g>
+  <g><circle cx="500" cy="750" r="18" class="masked"/><text x="500" y="750" class="label">PO4</text></g>
+  <g><circle cx="595" cy="740" r="18" class="masked"/><text x="595" y="740" class="label">PO8</text></g>
+
+  <!-- O / IZ -->
+  <g><circle cx="330" cy="815" r="18" class="masked"/><text x="330" y="815" class="label">O1</text></g>
+  <g><circle cx="400" cy="820" r="18" class="masked"/><text x="400" y="820" class="label">OZ</text></g>
+  <g><circle cx="470" cy="815" r="18" class="masked"/><text x="470" y="815" class="label">O2</text></g>
+  <g><circle cx="400" cy="875" r="18" class="masked"/><text x="400" y="875" class="label">IZ</text></g>
+
+  <!-- Recommendation panel -->
+  <rect x="775" y="105" width="370" height="795" rx="18" class="panel"/>
+  <text x="805" y="145" class="panel-title">保留 23（绿色）</text>
+  <text x="805" y="175" class="row">F3 F4</text>
+  <text x="805" y="199" class="row">FC5 FC3 FC1 FCZ</text>
+  <text x="805" y="223" class="row">FC2 FC4 FC6</text>
+  <text x="805" y="247" class="row">C5 C3 C1 CZ</text>
+  <text x="805" y="271" class="row">C2 C4 C6</text>
+  <text x="805" y="295" class="row">CP5 CP3 CP1 CPZ</text>
+  <text x="805" y="319" class="row">CP2 CP4 CP6</text>
+
+  <text x="805" y="365" class="panel-title">掩盖 41（红色虚线）</text>
+  <text x="805" y="395" class="row">FP1 FPZ FP2</text>
+  <text x="805" y="419" class="row">AF7 AF3 AFZ AF4 AF8</text>
+  <text x="805" y="443" class="row">F7 F5 F1 FZ F2 F6 F8</text>
+  <text x="805" y="467" class="row">FT7 FT8 T9 T7 T8 T10</text>
+  <text x="805" y="491" class="row">TP7 TP8</text>
+  <text x="805" y="515" class="row">P7 P5 P3 P1 PZ</text>
+  <text x="805" y="539" class="row">P2 P4 P6 P8</text>
+  <text x="805" y="563" class="row">PO7 PO3 POZ PO4 PO8</text>
+  <text x="805" y="587" class="row">O1 OZ O2 IZ</text>
+
+  <circle cx="820" cy="638" r="16" class="kept"/>
+  <text x="850" y="643" class="panel-text">真实输入导联</text>
+  <circle cx="820" cy="680" r="16" class="masked"/>
+  <text x="850" y="685" class="panel-text">从输入中删除/掩盖</text>
+
+  <text x="805" y="735" class="panel-title">设计原则</text>
+  <text x="805" y="765" class="panel-small">• C3 / CZ / C4 必须保留</text>
+  <text x="805" y="790" class="panel-small">• FC–C–CP 覆盖感觉运动带</text>
+  <text x="805" y="815" class="panel-small">• 所有非中线通道左右成对</text>
+  <text x="805" y="840" class="panel-small">• 23 导联是 32 导联的严格子集</text>
+  <text x="805" y="865" class="panel-small">• 适合固定跨被试消融，不代表全局最优</text>
+
+  <text x="590" y="958" class="subtitle" text-anchor="middle">相对位置示意图；建议按通道名选择数据，不要直接复用 EEG-FM-Bench 的整数 chs 索引</text>
+</svg>

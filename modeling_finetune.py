@@ -286,6 +286,67 @@ class NeuralTransformer(nn.Module):
         self.time_embed = nn.Parameter(torch.zeros(1, 16, embed_dim), requires_grad=True)
         self.pos_drop = nn.Dropout(p=drop_rate)
 
+        self.completion_scope = "none"
+        self.pooling_scope = "low"
+        self.target_input_chans_index = None
+        self.real_input_chans_index = None
+
+        self.register_buffer(
+            "tuev23_channel_prototypes",
+            torch.zeros(23, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "bciiv2a22_channel_prototypes",
+            torch.zeros(22, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "physionet64_channel_prototypes",
+            torch.zeros(64, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "seedv62_channel_prototypes",
+            torch.zeros(62, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "seed62_channel_prototypes",
+            torch.zeros(62, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "tuev23_with_seedv62_extra_channel_prototypes",
+            torch.zeros(70, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "hgd78_channel_prototypes",
+            torch.zeros(78, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "eegmat19_channel_prototypes",
+            torch.zeros(19, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "siena29_channel_prototypes",
+            torch.zeros(29, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "attention26_channel_prototypes",
+            torch.zeros(26, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
+            "erpcore28_channel_prototypes",
+            torch.zeros(28, embed_dim),
+            persistent=False,
+        )
+
         self.rel_pos_bias = None
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -346,25 +407,231 @@ class NeuralTransformer(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x, input_chans=None, return_patch_tokens=False, return_all_tokens=False, **kwargs):
-        batch_size, n, a, t = x.shape
-        input_time_window = a if t == self.patch_size else t
-        x = self.patch_embed(x)
+    def freeze_cnn(self):
+        for param in self.patch_embed.parameters(): #不计算 patch_embed 参数的梯度，也不更新它的权重。
+            param.requires_grad = False 
+        self.patch_embed.eval()     #让 patch_embed 里面某些层按推理模式运行。
+        #是一个保险写法：如果以后 patch_embed 里加了 Dropout 或 BatchNorm，它们也不会在训练时产生随机行为或更新统计量。
 
+    def forward_features(self, x, input_chans=None, return_patch_tokens=False, return_all_tokens=False, **kwargs):
+        # x: [B, N, A, T]
+        # B = batch size
+        # N = 当前真实输入通道数，例如 TUEV-13 时 N=13
+        # A = 每个通道切出来的 patch/time window 数
+        # T = 每个 patch 的长度，LaBraM 这里通常是 200
+        batch_size, n, a, t = x.shape
+
+        # Low-density layouts such as SEED-23 still use the pretrained global
+        # channel-position table. input_chans therefore contains one CLS index
+        # plus exactly one position index for each real input channel.
+        if input_chans is not None:
+            if len(input_chans) != n + 1:
+                raise ValueError(
+                    "LaBraM input channel-index mismatch: "
+                    f"input has {n} real channels, but input_chans has "
+                    f"{len(input_chans) - 1} channel positions"
+                )
+            if int(input_chans[0]) != 0:
+                raise ValueError(
+                    "LaBraM input_chans must start with CLS position index 0"
+                )
+
+        # 当前每个通道有多少个 temporal patch。
+        # 常见输入是 [B, N, A, 200]，所以 input_time_window = A。
+        input_time_window = a if t == self.patch_size else t
+
+        # 原来这里是：
+        #   x = self.patch_embed(x)
+        #
+        # 原来的 x 只包含真实输入通道 token。
+        # 现在先命名为 x_real，因为后面可能还要创建补通道后的 x_full。
+        # 第一步：只对真实输入通道做 CNN/TemporalConv patch_embed。
+        # 输出 x_real: [B, N * input_time_window, embed_dim]
+        x_real = self.patch_embed(x)
+
+        if self.completion_scope == "none":
+            # completion_scope=none 时，等价于原来的：
+            #   x = self.patch_embed(x)
+            # 不补通道，保持原始 LaBraM 行为。
+            # 后续 token 只包含真实输入通道。
+            x = x_real
+
+            # token_input_chans_index 用来选择 position embedding。
+            # 不补通道时，它就是 input_chans。
+            # input_chans 由当前真实输入的 ch_names 通过 utils.get_input_chans(ch_names) 算出来。
+            token_input_chans_index = input_chans
+
+            pool_token_indices = None
+            target_channels_num = n  # 当前 token 对应的通道数
+        else:
+            # 补通道时，需要先把真实 token reshape 回按通道分组的形式。
+            # [B, N * A, C] -> [B, N, A, C]
+            x_real = x_real.reshape(batch_size, n, input_time_window, self.embed_dim)
+
+            # 根据 completion_scope 选择对应的 target prototype。
+            if self.completion_scope == "tuev13_with_tuev23":
+                # prototypes: [23, embed_dim]
+                prototypes = self.tuev23_channel_prototypes
+            elif self.completion_scope == "bciiv2a13_with_bciiv2a22":
+                # prototypes: [22, embed_dim]
+                prototypes = self.bciiv2a22_channel_prototypes
+            elif self.completion_scope == "physionet23_with_physionet64":
+                # prototypes: [64, embed_dim]
+                prototypes = self.physionet64_channel_prototypes
+            elif self.completion_scope == "physionet32_with_physionet64":
+                # prototypes: [64, embed_dim]
+                prototypes = self.physionet64_channel_prototypes
+            elif self.completion_scope == "seedv23_with_seedv62":
+                # prototypes: [62, embed_dim]
+                prototypes = self.seedv62_channel_prototypes
+            elif self.completion_scope == "seed23_with_seed62":
+                # SEED 36A: 23 real channels completed to the native 62-channel montage.
+                prototypes = self.seed62_channel_prototypes
+            elif self.completion_scope == "tuev23_with_seedv62_extra":
+                # prototypes: [70, embed_dim]
+                prototypes = self.tuev23_with_seedv62_extra_channel_prototypes
+            elif self.completion_scope == "hgd20_with_hgd78":
+                # HGD 39A: 20 real motor-cortex channels completed to HGD-78.
+                prototypes = self.hgd78_channel_prototypes
+            elif self.completion_scope == "eegmat8_with_eegmat19":
+                # EEGMAT 37A: 8 real channels completed to the native 19-channel montage.
+                prototypes = self.eegmat19_channel_prototypes
+            elif self.completion_scope == "siena13_with_siena29":
+                # Siena 40A: 13 real channels completed to the native 29-channel montage.
+                prototypes = self.siena29_channel_prototypes
+            elif self.completion_scope == "attention10_with_attention26":
+                # Attention 44A: 10 real channels completed to the native 26-channel montage.
+                prototypes = self.attention26_channel_prototypes
+            elif self.completion_scope == "erpcore12_with_erpcore28":
+                # ERP CORE: 12 real channels completed to the 28-channel target.
+                prototypes = self.erpcore28_channel_prototypes
+            else:
+                raise ValueError(f"Unsupported completion_scope: {self.completion_scope}")
+
+            target_channels_num = prototypes.shape[0]  # 当前 token 对应的通道数
+
+            # 用 prototype 初始化完整 target 通道空间。
+            #
+            # prototypes 原始形状:
+            #   [target_channels_num, embed_dim]
+            #
+            # expand 后:
+            #   [B, target_channels_num, input_time_window, embed_dim]
+            #
+            # 含义：
+            #   每个 target 通道、每个 time patch，先都填这个通道自己的 prototype。
+            x_full = prototypes.unsqueeze(0).unsqueeze(2).expand(
+                batch_size,
+                target_channels_num,
+                input_time_window,
+                self.embed_dim,
+            ).clone()
+
+            if self.real_input_chans_index is None or self.target_input_chans_index is None:
+                raise ValueError(
+                    "real_input_chans_index and target_input_chans_index must be set "
+                    "when completion_scope is not none"
+                )
+
+            # real_input_chans_index 和 target_input_chans_index 都是 LaBraM position embedding 索引。
+            # 它们都包含 cls token，所以第 0 个元素是 cls，真正通道从 [1:] 开始。
+            #
+            # 例如：
+            #   target_input_chans_index = [0] + TUEV-23 的 LaBraM pos_embed index
+            #   real_input_chans_index   = [0] + TUEV-13 的 LaBraM pos_embed index
+            real_channel_pos = list(self.real_input_chans_index[1:]) #real_input_chans_index 从当前真实输入的 ch_names 算出来
+            target_channel_pos = list(self.target_input_chans_index[1:])
+
+            # 记录真实输入通道在 target tensor 里的通道维下标。
+            # 注意：这里保存的是 x_full 的第 1 维下标，例如 TUEV-23 里的 0 到 22。
+            # 它不是 LaBraM 128 position embedding 里的 index。
+            # pooling_scope=low 时会用它只 pool 真实通道。
+            real_channel_indices_in_target_tensor = []
+            for real_i, real_pos in enumerate(real_channel_pos):
+                # target_i 是该真实通道在 target 空间里的第几个通道。
+                # 注意：这不是 LaBraM 128 里的 index，而是 target tensor x_full 的通道维 index。
+                target_i = target_channel_pos.index(real_pos)
+                real_channel_indices_in_target_tensor.append(target_i)
+
+                # 用真实 patch_embed feature 覆盖 prototype。
+                #
+                # x_real[:, real_i, :, :]：
+                #   第 real_i 个真实输入通道的所有 time patch feature。
+                #
+                # x_full[:, target_i, :, :]：
+                #   target 空间里对应通道的位置。
+                x_full[:, target_i, :, :] = x_real[:, real_i, :, :]
+
+            # 补完后，把 [B, target_channels_num, A, C] 展平成 transformer token：
+            # [B, target_channels_num * A, C]
+            x = x_full.flatten(1, 2)
+
+            # 后面 position embedding 应该使用 target_input_chans_index。
+            # 因为此时 token 已经是 target 通道空间，不再是原始真实输入空间。
+            token_input_chans_index = self.target_input_chans_index
+
+            # pooling_scope=low：最后只 pool 真实输入通道对应的 token。
+            # pooling_scope=high：最后 pool 所有补完后的 target token。
+            pool_token_indices = (
+                real_channel_indices_in_target_tensor
+                if self.pooling_scope == "low"
+                else None
+            )
+
+        # 原来这里开始就已经进入公共逻辑：
+        #   cls_tokens = self.cls_token.expand(batch_size, -1, -1)
+        #   x = torch.cat((cls_tokens, x), dim=1)
+        #
+        # 这两行本身不用变。
+        # 变化只在于：这里的 x 可能是原始真实 token，也可能是补通道后的 target token。
+        # 加 cls token。
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
 
         x = torch.cat((cls_tokens, x), dim=1)
 
-        pos_embed_used = self.pos_embed[:, input_chans] if input_chans is not None else self.pos_embed
         if self.pos_embed is not None:
+            # 原来这里是：
+            #   pos_embed_used = self.pos_embed[:, input_chans] if input_chans is not None else self.pos_embed
+            #
+            # 现在改成使用 token_input_chans_index：
+            #   不补通道时 token_input_chans_index = input_chans
+            #     input_chans 由当前真实输入的 ch_names 通过 utils.get_input_chans(ch_names) 算出来。
+            #     也就是 token_input_chans_index = input_chans。
+            #     所以它对应真实输入通道的 LaBraM position embedding 索引。
+            #
+            #   补通道时 token_input_chans_index = self.target_input_chans_index
+            #     因为此时 x 已经从真实输入通道扩展成 target 通道空间，
+            #     position embedding 也必须使用 target 通道空间的索引。
+            #
+            # 原因是补通道后，x 已经是 target 通道空间，position embedding 也要用 target 通道空间。
+            # 加 channel position embedding。
+            # token_input_chans_index 包含 cls token，所以可以直接索引 pos_embed。
+            pos_embed_used = self.pos_embed[:, token_input_chans_index] if token_input_chans_index is not None else self.pos_embed
             pos_embed = pos_embed_used[:, 1:, :].unsqueeze(2).expand(batch_size, -1, input_time_window, -1).flatten(1, 2)
             pos_embed = torch.cat((pos_embed_used[:,0:1,:].expand(batch_size, -1, -1), pos_embed), dim=1)
             x = x + pos_embed
         if self.time_embed is not None:
-            nc = n if t == self.patch_size else a
-            time_embed = self.time_embed[:, 0:input_time_window, :].unsqueeze(1).expand(batch_size, nc, -1, -1).flatten(1, 2)
+            # 原来这里是：
+            #   nc = n if t == self.patch_size else a   # 这里 nc 是通道数。x.shape = [B, N, A, T]
+            #   time_embed = self.time_embed[:, 0:input_time_window, :].unsqueeze(1).expand(
+            #       batch_size, nc, -1, -1
+            #   ).flatten(1, 2)
+            #
+            # 现在直接用 target_channels_num：
+            #   不补通道时 target_channels_num = n
+            #   补通道时 target_channels_num = prototype 的目标通道数
+            #
+            # 原因是补通道后，token 数量已经变成 target_channels_num * input_time_window。
+            # 加 time embedding。
+            # 每个通道共享同一套 time embedding。
+            time_embed = self.time_embed[:, 0:input_time_window, :].unsqueeze(1).expand(batch_size, target_channels_num, -1, -1).flatten(1, 2)
             x[:, 1:, :] += time_embed
 
+        # 下面 transformer blocks 和原来一样：
+        #   x = self.pos_drop(x)
+        #   for blk in self.blocks:
+        #       x = blk(x, rel_pos_bias=None)
+        #   x = self.norm(x)
         x = self.pos_drop(x)
         
         for blk in self.blocks:
@@ -374,11 +641,32 @@ class NeuralTransformer(nn.Module):
         if self.fc_norm is not None:
             if return_all_tokens:
                 return self.fc_norm(x)
-            t = x[:, 1:, :]
+            patch_tokens = x[:, 1:, :]
             if return_patch_tokens:
-                return self.fc_norm(t)
-            else:
-                return self.fc_norm(t.mean(1))
+                return self.fc_norm(patch_tokens)
+
+            # 原来这里是：
+            #   return self.fc_norm(t.mean(1))
+            #
+            # 原来直接对所有真实输入 patch token 做 mean pooling。
+            # 现在如果 pooling_scope=low，需要先从 target token 里取回真实输入通道对应的 token。
+            if pool_token_indices is not None:
+                # pooling_scope=low:
+                # patch_tokens 当前是 [B, target_channels_num * A, C]。
+                # 先 reshape 回 [B, target_channels_num, A, C]，
+                # 再只取真实输入通道对应的 target index。
+                patch_tokens = patch_tokens.reshape(
+                    batch_size,
+                    target_channels_num,
+                    input_time_window,
+                    self.embed_dim,
+                )
+                patch_tokens = patch_tokens[:, pool_token_indices, :, :]
+                return self.fc_norm(patch_tokens.flatten(1, 2).mean(1))
+
+            # completion_scope=none 或 pooling_scope=high：
+            # 直接对当前全部 patch token 做平均。
+            return self.fc_norm(patch_tokens.mean(1))
         else:
             if return_all_tokens:
                 return x
