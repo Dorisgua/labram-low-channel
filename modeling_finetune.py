@@ -14,7 +14,8 @@ from functools import partial
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from timm.models.layers import drop_path, to_2tuple, trunc_normal_
+from timm.models.layers import drop_path, trunc_normal_
+# from timm.models.layers import to_2tuple
 from timm.models.registry import register_model
 from einops import rearrange
 
@@ -759,18 +760,11 @@ def labram_base_patch200_200(pretrained=False, **kwargs):
     model.default_cfg = _cfg()
     return model
 
-@register_model
-def labram_large_patch200_200(pretrained=False, **kwargs):
-    model = NeuralTransformer(
-        patch_size=200, embed_dim=400, depth=24, num_heads=16, mlp_ratio=4, out_chans=16, qk_norm=partial(nn.LayerNorm, eps=1e-6), # qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model.default_cfg = _cfg()
-    return model
+# Standalone ERP-Core Stage1/Stage2 only creates labram_base_patch200_200.
+# @register_model
+# def labram_large_patch200_200(pretrained=False, **kwargs):
+#     ...
 
-@register_model
-def labram_huge_patch200_200(pretrained=False, **kwargs):
-    model = NeuralTransformer(
-        patch_size=200, embed_dim=800, depth=48, num_heads=16, mlp_ratio=4, out_chans=32, qk_norm=partial(nn.LayerNorm, eps=1e-6), # qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-    model.default_cfg = _cfg()
-    return model
+# @register_model
+# def labram_huge_patch200_200(pretrained=False, **kwargs):
+#     ...

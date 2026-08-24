@@ -28,7 +28,7 @@ from clean_disentangle.modeling import (
     ReconstructionScope,
     ReconstructionSpec,
 )
-from clean_disentangle.run import build_erpcore_reconstruction_model
+from clean_disentangle.stage1.train_stage1 import build_erpcore_reconstruction_model
 
 
 TASK_NAMES = {

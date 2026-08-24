@@ -33,9 +33,7 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_ROOT}/outputs/stage2}"
 BACKGROUND="${BACKGROUND:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 RUN_AUDIT="${RUN_AUDIT:-0}"
-RESUME="${RESUME:-}" 
-REQUIRE_PROBE_MATCH="${REQUIRE_PROBE_MATCH:-0}"
-FORMAL_PROBE_CKPT="${FORMAL_PROBE_CKPT:-}"
+# RESUME="${RESUME:-}"
 
 make_abs() {
     if [[ "$1" == /* ]]; then printf '%s\n' "$1"; else printf '%s/%s\n' "${PROJECT_ROOT}" "$1"; fi
@@ -45,8 +43,7 @@ STAGE1_CKPT="$(make_abs "${STAGE1_CKPT}")"
 STAGE1_CONFIG="$(make_abs "${STAGE1_CONFIG}")"
 DATA_PATH="$(make_abs "${DATA_PATH}")"
 OUTPUT_ROOT="$(make_abs "${OUTPUT_ROOT}")"
-if [[ -n "${RESUME}" ]]; then RESUME="$(make_abs "${RESUME}")"; fi
-if [[ -n "${FORMAL_PROBE_CKPT}" ]]; then FORMAL_PROBE_CKPT="$(make_abs "${FORMAL_PROBE_CKPT}")"; fi
+# if [[ -n "${RESUME}" ]]; then RESUME="$(make_abs "${RESUME}")"; fi
 
 case "${INPUT_MODE}" in full|observed_only|prototype|dynamic) ;; *) echo "INPUT_MODE must be full, observed_only, prototype, or dynamic" >&2; exit 2 ;; esac
 if [[ "${LAST_N_BLOCKS}" -lt 0 ]]; then echo "LAST_N_BLOCKS must be non-negative" >&2; exit 2; fi
@@ -75,9 +72,7 @@ CMD=("${PYTHON}" -u -m clean_disentangle.stage2.train_stage2
 [[ "${TRAIN_CNN}" == "1" ]] && CMD+=(--train-cnn)
 [[ "${DRY_RUN}" == "1" ]] && CMD+=(--dry-run)
 [[ "${RUN_AUDIT}" == "1" ]] && CMD+=(--audit-only)
-[[ -n "${RESUME}" ]] && CMD+=(--resume "${RESUME}")
-[[ "${REQUIRE_PROBE_MATCH}" == "1" ]] && CMD+=(--require-probe-match)
-[[ -n "${FORMAL_PROBE_CKPT}" ]] && CMD+=(--formal-probe-checkpoint "${FORMAL_PROBE_CKPT}")
+# [[ -n "${RESUME}" ]] && CMD+=(--resume "${RESUME}")
 
 echo "Resolved Stage2 launcher: EXP_NAME=${EXP_NAME} INPUT_MODE=${INPUT_MODE} LAST_N_BLOCKS=${LAST_N_BLOCKS} SEED=${SEED} OUTPUT_DIR=${OUTPUT_DIR}"
 if [[ "${DRY_RUN}" == "1" ]]; then
