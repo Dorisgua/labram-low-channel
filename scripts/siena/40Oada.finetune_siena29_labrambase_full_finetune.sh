@@ -86,6 +86,7 @@ CMD=(
     --completion_scope none
     --pooling_scope low
     --classifier_mode adabrain_all_token
+    --classifier_token_scope real
     --best_metric "${BEST_METRIC}"
     --batch_size "${BATCH_SIZE}"
     --update_freq "${UPDATE_FREQ}"

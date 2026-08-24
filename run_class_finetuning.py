@@ -315,6 +315,7 @@ DATASET_CONFIGS = {
         },
         'pass_channel_names': True,
         'nb_classes': 6,
+        'num_t': 5,
         'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
     },
     'bciiv2a': {

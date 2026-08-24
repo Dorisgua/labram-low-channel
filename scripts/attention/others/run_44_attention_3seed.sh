@@ -16,9 +16,9 @@ DRY_RUN="${DRY_RUN:-0}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
 ATTENTION_SEEDS=(${ATTENTION_SEEDS:-1 2})
 
-ATTENTION_O_SCRIPT="scripts/attention/44Omeanpool.finetune_attention26_labrambase_full_finetune.sh"
-ATTENTION_N_SCRIPT="scripts/attention/44Nmeanpool.finetune_attention10_labrambase_full_finetune.sh"
-ATTENTION_A_SCRIPT="scripts/attention/44Ameanpool.finetune_attention10_with_attention26_prototype_labrambase_full_finetune.sh"
+ATTENTION_O_SCRIPT="scripts/attention/44Oada.finetune_attention26_labrambase_full_finetune.sh"
+ATTENTION_N_SCRIPT="scripts/attention/44Nada.finetune_attention10_labrambase_full_finetune.sh"
+ATTENTION_A_SCRIPT="scripts/attention/44Aada.finetune_attention10_with_attention26_prototype_labrambase_full_finetune.sh"
 ATTENTION_PROTOTYPE="docs/prototypes/01_attention26_cnn_patch_embed_mean.pth"
 ATTENTION_MANIFEST="/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Attention/processed_data_4s_200hz/manifest.json"
 

@@ -18,10 +18,10 @@ SEED_PROTOTYPE="docs/prototypes/01_seed62_cnn_patch_embed_mean.pth"
 EXPERIMENTS=(
     "scripts/seed/36Oada.finetune_seed62_labrambase_freeze_cnn.sh"
     "scripts/seed/36Nada.finetune_seed23_labrambase_freeze_cnn.sh"
-    "scripts/seed/36Omeanpool.finetune_seed62_labrambase_freeze_cnn.sh"
-    "scripts/seed/36Nmeanpool.finetune_seed23_labrambase_freeze_cnn.sh"
-    "scripts/seed/36Ahmeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
-    "scripts/seed/36Almeanpool.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Oada.finetune_seed62_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Nada.finetune_seed23_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Ahada.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
+    "scripts/seed/36Alada.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
     "scripts/seed/36Alada.finetune_seed23_with_seed62_prototype_labrambase_freeze_cnn.sh"
 )
 SEEDS=(0 1 2)
