@@ -859,7 +859,7 @@ python experiment_logging_notes/extract_best_metrics.py "/inspire/ssd/tenant_pre
   当前目录里的代码，相比 clean-before-prototype 这个参照点，改了什么。
 
 
-
+### erpcore复制到指定文件夹
 /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt
 
 复制到/inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt
@@ -875,4 +875,30 @@ stat -c '%s %n' \
     /inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt
 
 
+
 /inspire/hdd/project/sais-medical/public/medical_agent/SR/SR_Dataset/EEG-bciiv2a/processed_data
+
+
+git config --local user.name "Dorisgua"
+git config --local user.email "dorisgua@github.com"
+
+
+### tuev复制到指定文件夹
+
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/TUEZ/v2.0.1/processed_labram/processed
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG/TUEZ/v2.0.1/processed_labram/processed
+
+ diff -qr \
+    /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/TUEZ/v2.0.1/processed_labram/processed \
+    /inspire/hdd/project/sais-medical/public/share_medical/EEG/TUEZ/v2.0.1/processed_labram/processed
+
+
+### seed复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/SEED/processed_data
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG/SEED/processed_data
+
+### seedv复制到指定文件夹
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG/SEED_V/SEED-V-labram

@@ -81,6 +81,9 @@ FINETUNE="./checkpoints/labram-base.pth"
 #   TUAB
 DATASET="TUEV"
 
+# Processed TUEV dataset path. Can be overridden with DATA_PATH.
+export DATA_PATH="${DATA_PATH:-/inspire/hdd/project/sais-medical/public/share_medical/EEG/TUEZ/v2.0.1/processed_labram/processed}"
+
 # Channel subset choices currently planned:
 #   TUEV:  tuev13, tuev23
 #   SEEDV: seedv23, seedv62
@@ -171,6 +174,10 @@ if [[ ! -f "${FINETUNE}" ]]; then
     echo "Missing finetune checkpoint: ${FINETUNE}"
     exit 1
 fi
+if [[ ! -d "${DATA_PATH}" ]]; then
+    echo "Missing TUEV dataset directory: ${DATA_PATH}"
+    exit 1
+fi
 if [[ "${COMPLETION_SCOPE}" != "none" && ! -f "${CHANNEL_PROTOTYPE_PATH}" ]]; then
     echo "Missing TUEV channel prototype: ${CHANNEL_PROTOTYPE_PATH}"
     exit 1
@@ -188,6 +195,7 @@ CMD=(
     --model "${MODEL}"
     --finetune "${FINETUNE}"
     --dataset "${DATASET}"
+    --data_path "${DATA_PATH}"
     --channel_subset "${CHANNEL_SUBSET}"
     --completion_scope "${COMPLETION_SCOPE}"
     --pooling_scope "${POOLING_SCOPE}"
