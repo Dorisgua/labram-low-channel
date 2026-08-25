@@ -902,3 +902,27 @@ git config --local user.email "dorisgua@github.com"
 ### seedv复制到指定文件夹
 
 /inspire/hdd/project/sais-medical/public/share_medical/EEG/SEED_V/SEED-V-labram
+
+### attention复制到指定文件夹
+
+我想把这个数据集/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Attention/processed_data_4s_200hz
+
+复制到/inspire/hdd/project/sais-medical/public/share_medical/EEG/Attention
+
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG/Attention/processed_data_4s_200hz
+
+  mkdir -p /inspire/hdd/project/sais-medical/public/share_medical/EEG/Attention
+
+  cp -a \
+    /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Attention/processed_data_4s_200hz \
+    /inspire/hdd/project/sais-medical/public/share_medical/EEG/Attention/
+
+### Siena复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Siene/processed_data_10s_200hz_adabrain_normstats
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG/Siena/processed_data_10s_200hz_adabrain_normstats
+
+  cp -a \
+    /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Siene/processed_data_10s_200hz_adabrain_normstats \
+    /inspire/hdd/project/sais-medical/public/share_medical/EEG/Siena/
