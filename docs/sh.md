@@ -926,3 +926,61 @@ git config --local user.email "dorisgua@github.com"
   cp -a \
     /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Siene/processed_data_10s_200hz_adabrain_normstats \
     /inspire/hdd/project/sais-medical/public/share_medical/EEG/Siena/
+
+### physionet复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/physionet/physionet.org/files/eegmmidb/processed_eegfmbench/processed/fs_200/motor_mv_img/finetune/1.0.0
+
+我想把/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/physionet
+
+复制到/inspire/hdd/project/sais-medical/public/share_medical/EEG/
+
+得到/inspire/hdd/project/sais-medical/public/share_medical/EEG/physionet
+
+
+cp -a \
+  /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/physionet \
+  /inspire/hdd/project/sais-medical/public/share_medical/EEG/
+
+### faced复制到指定文件夹
+
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/FACED/processed_data_10s_200hz
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG
+
+cp -a \
+  /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/FACED \
+  /inspire/hdd/project/sais-medical/public/share_medical/EEG/
+
+### eegmat复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/EEGMAT
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG
+
+cp -a \
+  /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/EEGMAT \
+  /inspire/hdd/project/sais-medical/public/share_medical/EEG/
+
+
+/inspire/hdd/project/sais-medical/public/share_medical/EEG/EEGMAT
+
+### hgd复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/HGD/processed_data_4s_200hz
+
+cp -a \
+  /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/HGD \
+  /inspire/hdd/project/sais-medical/public/share_medical/EEG/
+
+### aad复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/AAD/processed_data_4s_200hz
+
+cp -a \
+  /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/AAD \
+  /inspire/hdd/project/sais-medical/public/share_medical/EEG/
+
+
+### zuo2025复制到指定文件夹
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Zuo2025/processed_data_4s_200hz
+
+cp -a \
+  /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/Zuo2025 \
+  /inspire/hdd/project/sais-medical/public/share_medical/EEG/

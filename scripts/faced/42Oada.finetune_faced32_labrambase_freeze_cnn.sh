@@ -43,7 +43,8 @@ SEED="${SEED:-0}"
 
 MODEL="labram_base_patch200_200"
 FINETUNE="${FINETUNE:-./checkpoints/labram-base.pth}"
-DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/FACED/processed_data_10s_200hz}"
+DATA_PATH="${DATA_PATH:-/inspire/hdd/project/sais-medical/public/share_medical/EEG/FACED/processed_data_10s_200hz}"
+# DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/FACED/processed_data_10s_200hz}"
 CHANNEL_SUBSET="${CHANNEL_SUBSET:-faced32}"
 TORCHRUN="${TORCHRUN:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/micromamba-root/envs/labram/bin/torchrun}"
 
