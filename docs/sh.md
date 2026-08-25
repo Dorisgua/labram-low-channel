@@ -857,3 +857,22 @@ python experiment_logging_notes/extract_best_metrics.py "/inspire/ssd/tenant_pre
   意思是：
 
   当前目录里的代码，相比 clean-before-prototype 这个参照点，改了什么。
+
+
+
+/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt
+
+复制到/inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt
+
+mkdir -p /inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation
+
+cp -v \
+    /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt \
+    /inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt
+
+stat -c '%s %n' \
+    /inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt \
+    /inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt
+
+
+/inspire/hdd/project/sais-medical/public/medical_agent/SR/SR_Dataset/EEG-bciiv2a/processed_data

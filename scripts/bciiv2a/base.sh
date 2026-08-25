@@ -3,7 +3,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 export DATASET="bciiv2a"
-export DATA_PATH="${DATA_PATH:-${REPO_DIR}/preprocessing/BCI-IV-2A/multi_subject_json}"
+# export DATA_PATH="${DATA_PATH:-${REPO_DIR}/preprocessing/BCI-IV-2A/multi_subject_json}"
+
 export FINETUNE="${FINETUNE:-${REPO_DIR}/checkpoints/labram-base.pth}"
 export SAMPLING_RATE="${SAMPLING_RATE:-200}"
 export UPDATE_FREQ="${UPDATE_FREQ:-1}"

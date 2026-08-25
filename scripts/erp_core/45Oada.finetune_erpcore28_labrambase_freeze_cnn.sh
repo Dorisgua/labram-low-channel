@@ -51,7 +51,8 @@ fi
 
 MODEL="labram_base_patch200_200"
 FINETUNE="${FINETUNE:-./checkpoints/labram-base.pth}"
-DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt}"
+# DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-main/CSLP-AE/data_preparation/simple_data.pt}"
+export DATA_PATH="${DATA_PATH:-/inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt}"
 CHANNEL_SUBSET="${CHANNEL_SUBSET:-erpcore28}"
 COMPLETION_SCOPE="${COMPLETION_SCOPE:-none}"
 POOLING_SCOPE="${POOLING_SCOPE:-low}"
