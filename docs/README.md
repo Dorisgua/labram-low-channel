@@ -279,105 +279,88 @@ LR 不同，因此分成两行。
 
 
 ### 整体结论
-0. 旧实验里同时满足 Test Acc 和 Test BAcc 都是 A（freeze CNN） > N（freeze CNN） 的数据集
 
-  - BCI-IV-2a：仅 33Arealada > 33Nada；普通 33Aada 不满足。
-  - TUEV：17Ah > 17N。
-  - PhysioNet：32 导联配置满足；23 导联配置不满足。
-  - SEED：mean_pool 的 Ah、Al 均高于 N，但有效 seed 集合不完全一致。
-  - SEED-V：mean_pool 的 Ah、Al 均高于 N。
-  - EEGMAT：仅 mean_pool 满足；adabrain_all_token 三 seed 均值不满足。
-  - Siena：40Aada > 40Nada。
+以下比较均同时考察 **Test Acc** 和 **Test BAcc**。除第 5 节外，A、N、O 均指
+**freeze CNN**；涉及不同 seed 数量或不同 classifier 时会单独注明。
 
-  另外，Attention 只在 Test Acc 均值上满足：
+#### 1. 旧实验：A > N （都freeze）
 
-  - Acc：A 78.27% > N 76.79%
-  - BAcc：A 63.70% < N 68.00%
+同时满足 Test Acc 和 Test BAcc 均为 A > N 的数据集：
 
-  因此 Attention 不属于“两项都满足”的名单。ERP-Core 没有同为 freeze CNN 的 A/N 旧实验可直接比较。
+- **BCI-IV-2a**：仅 `33Arealada > 33Nada`；普通 `33Aada` 不满足。
+- **TUEV**：`17Ah > 17N`。
+- **PhysioNet**：32 导联配置满足；23 导联配置不满足。
+- **SEED**：`mean_pool` 的 Ah、Al 均高于 N，但有效 seed 集合不完全一致。
+- **SEED-V**：`mean_pool` 的 Ah、Al 均高于 N。
+- **EEGMAT**：仅 `mean_pool` 满足；`adabrain_all_token` 的三 seed 均值不满足。
+- **Siena**：`40Aada > 40Nada`。
 
-1. 按旧结果表，同时满足 Test Acc 和 Test BAcc 都是 O（freeze CNN）> A（freeze CNN）> N（freeze CNN）的数据集有：
+Attention 仅 Test Acc 的均值满足 A > N：Test Acc 为 78.27% > 76.79%，但
+Test BAcc 为 63.70% < 68.00%，因此不计入上述名单。ERP-Core 没有同为
+freeze CNN 的 A/N 旧实验，无法直接比较。
 
-  - BCI-IV-2a：仅使用 33Arealada 时满足；普通 33Aada 不满足。
-  - TUEV
-  - PhysioNet：仅 32 导联配置满足，23 导联配置不满足。
-  - SEED-V：Ah 和 Al 两种 A 都满足。
-  - Siena
+#### 2. 旧实验：O > A > N （都freeze）
 
-  具体数值：
+| 数据集 | Test Acc：O > A > N | Test BAcc：O > A > N | 说明 |
+|---|---|---|---|
+| BCI-IV-2a | 55.48% > 54.71% > 52.62% | 55.48% > 54.71% > 52.62% | A 使用 `33Arealada`；普通 `33Aada` 不满足 |
+| TUEV | 81.68% > 81.30% > 79.87% | 63.90% > 61.48% > 60.62% | N 仅 seed 0；O/A 为多 seed 汇总 |
+| PhysioNet-32 | 63.22% > 55.26% > 54.97% | 63.23% > 55.27% > 55.00% | 仅 32 导联满足；23 导联不满足 |
+| SEED-V（Ah） | 40.18% > 39.63% > 39.18% | 40.53% > 39.51% > 39.10% | Ah 满足 |
+| SEED-V（Al） | 40.18% > 39.46% > 39.18% | 40.53% > 39.44% > 39.10% | Al 满足 |
+| Siena | 97.53% > 97.31% > 97.01% | 51.64% > 50.38% > 49.65% | — |
 
-   数据集          Test Acc：O > A > N         Test BAcc：O > A > N
-  ━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━
-   BCI-IV-2a       55.48% > 54.71% > 52.62%    55.48% > 54.71% > 52.62%
-  ──────────────  ──────────────────────────  ──────────────────────────
-   TUEV            81.68% > 81.30% > 79.87%    63.90% > 61.48% > 60.62%
-  ──────────────  ──────────────────────────  ──────────────────────────
-   PhysioNet-32    63.22% > 55.26% > 54.97%    63.23% > 55.27% > 55.00%
-  ──────────────  ──────────────────────────  ──────────────────────────
-   SEED-V（Ah）    40.18% > 39.63% > 39.18%    40.53% > 39.51% > 39.10%
-  ──────────────  ──────────────────────────  ──────────────────────────
-   SEED-V（Al）    40.18% > 39.46% > 39.18%    40.53% > 39.44% > 39.10%
-  ──────────────  ──────────────────────────  ──────────────────────────
-   Siena           97.53% > 97.31% > 97.01%    51.64% > 50.38% > 49.65%
+共 **5 个数据集**（SEED-V 的 Ah、Al 是同一数据集的两种 A 配置）。TUEV 不是严格的
+相同 seed 对比，只能说明按 README 当前汇总值满足 O > A > N。
 
-  其中 TUEV 的 N 只有 seed 0，而 O/A 是多 seed 汇总，因此属于“按 README 当前汇总值满足”，并不是严格
-  的相同 seed 对比。
+#### 3. 新实验：A > N （都freeze）
 
-3. 新实验里同时满足 Test Acc 和 Test BAcc 都是 A（freeze CNN） > N（freeze CNN） 的数据集
+| 数据集 | Test Acc：A > N | Test BAcc：A > N |
+|---|---:|---:|
+| BCI-IV-2a | 54.71% > 52.70% | 54.71% > 52.70% |
+| ERP-Core | 61.38% > 60.59% | 40.29% > 39.73% |
+| PhysioNet-32 | 54.36% > 53.62% | 54.37% > 53.65% |
+| SEED | 55.08% > 54.32% | 54.60% > 53.90% |
+| HGD | 80.03% > 78.37% | 80.02% > 78.37% |
 
-       数据集          Test Acc：A > N    Test BAcc：A > N
-  ━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━
-   BCI-IV-2a       54.71% > 52.70%    54.71% > 52.70%
-  ──────────────  ─────────────────  ──────────────────
-   ERP-Core        61.38% > 60.59%    40.29% > 39.73%
-  ──────────────  ─────────────────  ──────────────────
-   PhysioNet-32    54.36% > 53.62%    54.37% > 53.65%
-  ──────────────  ─────────────────  ──────────────────
-   SEED            55.08% > 54.32%    54.60% > 53.90%
-  ──────────────  ─────────────────  ──────────────────
-   HGD             80.03% > 78.37%    80.02% > 78.37%
+共 **5 个数据集**。这里只比较 A/N 的 freeze CNN，不包含 full finetune。
 
-  共 5 个数据集。这里只比较 A/N 的 freeze CNN，没有使用 full finetune。
+#### 4. 新实验：O > A > N（都freeze）
 
-4. 新实验里同时满足 Test Acc 和 Test BAcc 都是 O（freeze CNN） > A（freeze CNN） > N（freeze CNN） 的数据集：
+| 满足情况 | 数据集 |
+|---|---|
+| Test Acc 和 Test BAcc 均满足 | BCI-IV-2a、PhysioNet、SEED、HGD |
+| 仅 Test Acc 满足 | Siena |
+| 仅 Test BAcc 满足 | SEED-V |
+| 两项均不满足 | TUEV、EEGMAT、Attention |
+| 缺少完整 A/N 新实验，无法比较 | AAD、FACED、Zuo2025 |
 
-  - BCI-IV-2a
-  - PhysioNet
-  - SEED
-  - HGD
+TUEV 可能具有数据集自身的特征，需要结合其任务指标和 checkpoint 选择方式进一步分析。
 
-  仅 Test Acc 满足：
+#### 5. 新实验：A（freeze CNN）与 N（full finetune）比较
 
-  - Siena
+Test Acc 和 Test BAcc 均满足 A（freeze CNN）> N（full finetune）的有 **2 个数据集**：
 
-  仅 Test BAcc 满足：
-  - seedv
+| 数据集 | A（freeze CNN） | N（full finetune） | A − N |
+|---|---:|---:|---:|
+| BCI-IV-2a | Acc/BAcc 54.71% | Acc/BAcc 52.39% | +2.32 pp |
+| EEGMAT | Acc/BAcc 74.17% | Acc/BAcc 73.33% | +0.84 pp |
 
-  TUEV、EEGMAT、Attention 两项都不满足。（tuev可能有这个数据集自己的特征）
-  AAD、FACED、Zuo2025 缺少完整的 A/N 新实验，无法比较。
+Siena 仅 Test Acc 满足，Test BAcc 不满足，因此未计入。A 与 N 差距较小的配置如下
+（正值表示 A 更高，负值表示 N 更高）：
 
-5. 如果要求 Test Acc 和 Test BAcc 都满足 A（freeze CNN）> N（full finetune），新实验共有 2 个数据集：
+| 数据集 | Test Acc：A − N | Test BAcc：A − N |
+|---|---:|---:|
+| SEED-V | -0.19 pp | -0.16 pp |
+| SEED | -0.26 pp | -0.24 pp |
+| EEGMAT | +0.84 pp | +0.84 pp |
+| PhysioNet-32 | -0.95 pp | -0.96 pp |
 
-   数据集              A/freeze             N/full    A − N
-  ━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━
-   BCI-IV-2a    Acc/BAcc 54.71%    Acc/BAcc 52.39%    +2.32
-  ───────────  ─────────────────  ─────────────────  ───────
-   EEGMAT       Acc/BAcc 74.17%    Acc/BAcc 73.33%    +0.84
+#### 待办
 
-  另外 Siena 只有 Test Acc 满足，但 Test BAcc 不满足，因此未计入。
-
-  相差不大的：
-     数据集          Test Acc：A − N    Test BAcc：A − N
-  ━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━
-   SEED-V                    -0.19               -0.16
-  ──────────────  ─────────────────  ──────────────────
-   SEED                      -0.26               -0.24
-  ──────────────  ─────────────────  ──────────────────
-   EEGMAT                    +0.84               +0.84
-  ──────────────  ─────────────────  ──────────────────
-   PhysioNet-32              -0.95               -0.96
-
-待做：tuev和seedv的base.sh需要换选checkpoint的方式（tuev按照cohen kappa选择）和修改batchsize；需要mean pool的classifier的方式
+- [ ] 调整 TUEV 和 SEED-V 的 `base.sh` checkpoint 选择方式；TUEV 应按 Cohen's Kappa 选择。
+- [ ] 确认并修改 TUEV 和 SEED-V 的 batch size。
+- [ ] 为 TUEV 和 SEED-V 配置 `mean_pool` classifier。
 
 ### 12.1 BCI-IV-2a
 
