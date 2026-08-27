@@ -46,7 +46,8 @@ LaBraM-unified-AON-dynamic/
 ├── modeling_finetune.py             # 原有 LaBraM backbone 和分类模型
 ├── modeling_dynamic_stage1.py       # Dynamic Stage 1 模型
 ├── losses_dynamic.py                # Stage 1 各项 loss
-├── engine_for_finetuning.py         # 共享 Stage 1/Stage 2 训练、验证和日志
+├── engine_for_finetuning.py         # N/O/A 和 Dynamic Stage 2 分类 engine
+├── engine_for_dynamic_stage1.py     # Dynamic Stage 1 训练和重建验证
 ├── data_processor/erpcore.py        # 统一 ERP Core 数据接口
 ├── scripts/erp_core/
 │   ├── N/
@@ -179,25 +180,60 @@ CSLP-AE 原始论文命令启用的核心 loss 是四项：`sub_contra_s`、`tas
 
 loss 权重和 CSLP ramp 不应写进模型 forward。`ramp` 指“渐进启用”：训练前若干 epoch 将 CSLP 相关 loss 的系数从 0 逐步增加到配置值，避免模型一开始同时受到分类、重建和对比约束的强烈扰动。例如 `start_epoch=5、ramp_epochs=10` 时，第 5 个 epoch 开始启用，第 14 个 epoch 达到完整权重；若 `ramp_epochs <= 0`，则直接使用完整权重。
 
-### 6.3 共享训练 engine
+### 6.3 分类与 Dynamic Stage 1 engine
 
-不需要为 Stage 2 再复制一个新的 engine。建议继续使用 AON 的 `engine_for_finetuning.py`：保留原有 N/O/A 的分类训练和验证函数，再增加 Stage 1 专用的训练函数。这样 Stage 1 和 Stage 2 共享 AMP、梯度累积、日志、验证指标和 checkpoint 工具，但分别使用自己的 batch 读取和 loss 计算逻辑。
+采用两个独立的 engine 文件：保留原有 `engine_for_finetuning.py`，避免影响 N/O/A，并新增 `engine_for_dynamic_stage1.py` 承担 Stage 1 的字典 batch、多项 loss 和重建验证。两个文件共享训练协议和现有工具，但不强制共享同一个 epoch 函数。
 
-负责：
+#### 推荐目录职责
 
 ```text
-batch
-→ Stage 1 model.forward_pretrain()
-→ compute_dynamic_losses()
-→ total_loss.backward()
-→ optimizer.step()
-→ 记录每一项 loss
-→ 保存 checkpoint
+engine_for_finetuning.py
+├── train_class_batch()
+├── train_one_epoch()
+└── evaluate()
+    用于：N/O/A + Dynamic Stage 2
+
+engine_for_dynamic_stage1.py
+├── move_dynamic_batch()
+├── train_dynamic_stage1_one_epoch()
+└── evaluate_dynamic_stage1()
+    用于：Dynamic Stage 1
+
+losses_dynamic.py
+├── compute_dynamic_losses()
+├── missing / reg / auxiliary
+└── contrastive / permute / CSLP
+
+run_dynamic_stage1.py
+└── 组织 dataset、model、optimizer、engine 和 checkpoint
 ```
 
-Stage 2 仍走同一个 engine 中已有的分类流程：`x_obs → Dynamic completion → Transformer/classification head → logits`。它只读取观测导联和冻结的 Stage 1 参数，不读取 `x_full`，因此不需要额外的 Stage 2 engine。
+调用关系：
 
-第一版可以先启用 `missing` 和 `reg`，其余 loss 保留参数并默认关闭；基础链路稳定后再逐项打开 auxiliary 和 CSLP。
+```text
+N/O/A
+run_class_finetuning.py
+→ engine_for_finetuning.train_one_epoch()
+→ model.forward()
+→ classification loss
+
+Dynamic Stage 1
+run_dynamic_stage1.py
+→ engine_for_dynamic_stage1.train_dynamic_stage1_one_epoch()
+→ model.forward_stage1()
+→ losses_dynamic.compute_dynamic_losses()
+→ total_loss
+
+Dynamic Stage 2
+run_class_finetuning.py
+→ engine_for_finetuning.train_one_epoch()
+→ DynamicModel.forward()
+→ classification loss
+```
+
+两个 engine 需要保持一致的公共训练行为包括 AMP、梯度累积、LR/weight decay 调度、梯度裁剪、NaN/Inf 检查、日志格式和分布式同步。Stage 1 独立处理字典 batch、Dynamic forward、多项 loss 和 reconstruction 指标；Stage 2 继续使用原分类 engine，并且只读取 `x_obs` 和 `label`。
+
+第一版 Stage 1 先启用 `missing` 和 `reg`，其余 loss 保留参数并默认关闭；基础链路稳定后再逐项打开 auxiliary 和 CSLP。
 
 【那么原来的labram的forward入口放在哪里？】
 
@@ -238,6 +274,150 @@ class DynamicModel:
 ```
 
 其中 `forward_from_tokens()` 是计划新增的 token-level helper，表示跳过第二次 `patch_embed`，直接复用原 LaBraM 的 embedding、Transformer blocks 和 normalization。原来的 `NeuralTransformer.forward()` 不需要删除或替换。
+
+【然后 engine 里怎么做？】
+
+#### 回答
+
+engine 保留原来的分类训练函数，再增加一个 Stage 1 专用函数。两条路径分别调用不同入口：
+
+```python
+# Dynamic Stage 1
+def train_dynamic_stage1_one_epoch(model, data_loader, optimizer):
+    model.train()
+
+    for batch in data_loader:
+        batch = move_batch_to_device(batch)
+
+        with autocast():#【】
+            outputs = model.forward_stage1(batch)
+            losses = compute_dynamic_losses(outputs, batch)
+            loss = losses["total_loss"]
+
+        backward_and_optimizer_step(loss)
+        log_each_dynamic_loss(losses)
+```
+
+Stage 2 继续使用原来的分类 engine：
+
+```python
+# N/O/A 和 Dynamic Stage 2
+def train_class_batch(model, samples, labels, criterion):
+    logits = model(samples)  # 自动调用 model.forward()
+    loss = criterion(logits, labels)
+    return loss, logits
+```
+
+因此整体关系是：
+
+```text
+Stage 1 engine → forward_stage1() → dynamic losses
+Stage 2 engine → forward()        → classification loss
+```
+
+Stage 1 batch 使用 `x_obs`、`x_full`、`subject` 和 `task`；Stage 2 只取 `x_obs` 和 `label`。当前分类 engine 按 `(samples, labels)` 读取 batch，统一 dataset 改成字典后，需要增加一个兼容的 batch 解包函数，但 AMP、梯度累积、optimizer step 和日志逻辑可以继续复用。
+
+【`train_one_epoch()` 和 `train_class_batch()` 的关系是什么？】
+
+下面是按照当前 `engine_for_finetuning.py` 忠实简化后的伪代码。`train_class_batch()` 只负责一个 batch 的模型前向和分类 loss：
+
+```python
+def train_class_batch(model, samples, target, criterion, ch_names):
+    outputs = model(samples, ch_names)
+    loss = criterion(outputs, target)
+    return loss, outputs
+```
+
+这里的参数名虽然写成 `ch_names`，但 `train_one_epoch()` 实际传入的是转换后的 `input_chans` 索引。
+
+`train_one_epoch()` 是外层训练循环。当前实现同时支持 DeepSpeed 和 PyTorch `NativeScaler` 两条更新路径：
+
+```python
+def train_one_epoch(..., loss_scaler, update_freq, ch_names, input_scale):
+    # 将导联名称转换成 LaBraM 使用的位置索引。
+    input_chans = utils.get_input_chans(ch_names)
+
+    # 切换到训练模式，并在 epoch 开始前清空梯度。
+    model.train(True)
+    clear_gradients(model, optimizer, loss_scaler)
+
+    for data_iter_step, (samples, targets) in enumerate(data_loader):
+        # 将 EEG 和标签移动到设备；同时完成 input_scale、
+        # [B, N, A*T] → [B, N, A, T] reshape 和二分类标签处理。
+        samples, targets = prepare_class_batch(
+            samples, targets, device, input_scale, is_binary
+        )
+        # targets 是分类真值标签，只传给 criterion 和准确率计算，
+        # 不作为 EEG 输入传给模型；它不是 Dynamic 的 h_miss_target。
+
+        if loss_scaler is None:
+            # DeepSpeed 路径：输入转成 FP16，DeepSpeed 管理混合精度。
+            loss, outputs = train_class_batch(
+                model, samples.half(), targets, criterion, input_chans
+            )
+        else:
+            # 普通 PyTorch 路径：使用 autocast 执行混合精度前向。
+            with autocast():
+                loss, outputs = train_class_batch(
+                    model, samples, targets, criterion, input_chans
+                )
+
+        # 在反向传播前检查 loss，并根据 update_freq 做梯度累积缩放。
+        check_loss_is_finite(loss)
+        loss = loss / update_freq
+        is_update_step = (data_iter_step + 1) % update_freq == 0
+
+        if loss_scaler is None:      # DeepSpeed
+            # DeepSpeed 在 model.step() 内部判断是否到达参数更新边界。
+            model.backward(loss)
+            model.step()
+        else:                        # PyTorch + NativeScaler
+            # NativeScaler 只在 is_update_step=True 时更新模型参数。
+            loss_scaler(loss, optimizer, update_grad=is_update_step)
+            if is_update_step:
+                optimizer.zero_grad()
+
+        # 记录当前 batch 的 loss、分类准确率、学习率等训练信息。
+        log_training_stats(loss, outputs, targets)
+```
+
+【`check_loss_is_finite`、`loss / update_freq` 和 `is_update_step` 是什么意思？】
+
+这三行用于检查异常 loss，并控制梯度累积：
+
+```python
+# NaN 或 Inf 无法正常反向传播，因此发现后立即停止训练。
+check_loss_is_finite(loss)
+
+# 连续 update_freq 个小 batch 的梯度会累加；每个 loss 先除以
+# update_freq，最终得到的是这些小 batch 的平均梯度。
+loss = loss / update_freq
+
+# 只有累积到第 update_freq 个小 batch 时才真正更新参数。
+is_update_step = (data_iter_step + 1) % update_freq == 0
+```
+
+例如 `update_freq=4`：
+
+```text
+batch 1：backward，累积梯度，不更新参数
+batch 2：backward，累积梯度，不更新参数
+batch 3：backward，累积梯度，不更新参数
+batch 4：backward，累积梯度，optimizer.step()，然后清空梯度
+```
+
+因此，它相当于用 4 个小 batch 模拟一个更大的 batch。PyTorch `NativeScaler` 通过 `update_grad=is_update_step` 控制何时更新；DeepSpeed 则在每次调用 `model.step()` 时由内部的梯度累积配置判断是否真正更新参数。
+
+两者的关系可以概括为：
+
+```text
+train_one_epoch()
+└── 对每个 batch 调用 train_class_batch()
+    ├── model.forward()
+    └── criterion() → classification loss
+```
+
+因此，之前写成统一的 `backward() → optimizer.step()` 只是概念表达，并不等同于当前代码；上面的两个分支才对应当前 engine 的实际结构。
 
 #### model.forward_pretrain()讨论结论
 
@@ -281,6 +461,8 @@ x_obs
    ```
 
 cleanup 版本的 corrector 虽然接收 `p_obs`，但内部目前没有实际使用它，只使用 `h_obs` 和 `p_miss`。第一版建议保留这个参数以维持接口一致，是否让 corrector 显式使用 `p_obs` 可以在最小链路验证后再决定。
+
+【engine里是怎么做的？】
 
 ## 7. 分阶段实施步骤
 
