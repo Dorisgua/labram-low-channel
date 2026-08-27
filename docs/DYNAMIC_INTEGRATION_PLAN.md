@@ -69,18 +69,20 @@ LaBraM-unified-AON-dynamic/
 
 ## 5. 统一数据接口
 
-ERP Core dataset 统一返回字典：
+ERP Core dataset 统一返回固定顺序的 tuple：
 
 ```python
-{
-    "x": ...,          # 当前实验的主输入
-    "x_obs": ...,      # 观测导联
-    "x_full": ...,     # 完整导联，仅供 Stage 1 生成重建目标
-    "label": ...,      # 下游任务标签
-    "subject": ...,    # subject 标签，供 auxiliary/CSLP 使用
-    "task": ...,       # task 标签，供 auxiliary/CSLP 使用
-}
+(
+    x,        # 当前实验的主输入
+    label,    # 下游任务标签
+    x_obs,    # 观测导联
+    x_full,   # 完整导联，仅供 Stage 1 生成重建目标
+    subject,  # subject 标签，供 auxiliary/CSLP 使用
+    task,     # task 标签，供 auxiliary/CSLP 使用
+)
 ```
+
+其中 `x` 根据实验设置：N/A/Dynamic Stage 2 使用 `x_obs`，O 使用 `x_full`；Dynamic Stage 1 虽然也令 `x=x_obs`，但会显式读取后面的 `x_obs` 和 `x_full`。
 
 各实验只读取需要的字段：
 
@@ -92,7 +94,7 @@ ERP Core dataset 统一返回字典：
 | Dynamic Stage 1 | `x_obs`、`x_full`、`subject`、`task`，必要时使用 `label` |
 | Dynamic Stage 2 | `x_obs`、`label`、冻结的 Stage 1 |
 
-统一 dataset 可以返回全部字段；由不同训练阶段的接收端选择需要的字段。为了避免信息泄漏，Dynamic Stage 2 的前向和 loss 代码只能读取 `x_obs`，不能读取 `x_full`。`x_full` 只用于 Stage 1 生成 `h_miss_target`，或用于离线审计。
+统一 dataset 返回全部字段，由不同训练阶段直接解包需要的部分。分类 engine 的训练和验证都使用 `samples, targets, *_ = batch`，因此同时兼容原来的二字段 tuple 和新的完整 tuple；不能再用 `batch[-1]` 取标签，因为完整 tuple 的最后一个字段是 `task`。Dynamic Stage 1 使用完整解包。为了避免信息泄漏，Dynamic Stage 2 只把第一个字段 `x=x_obs` 传给模型，不能把 `x_full` 传入前向。`x_full` 只用于 Stage 1 生成 `h_miss_target`，或用于离线审计。
 
 ## 6. Stage 1 模型和 loss 的职责
 
@@ -182,7 +184,7 @@ loss 权重和 CSLP ramp 不应写进模型 forward。`ramp` 指“渐进启用�
 
 ### 6.3 分类与 Dynamic Stage 1 engine
 
-采用两个独立的 engine 文件：保留原有 `engine_for_finetuning.py`，避免影响 N/O/A，并新增 `engine_for_dynamic_stage1.py` 承担 Stage 1 的字典 batch、多项 loss 和重建验证。两个文件共享训练协议和现有工具，但不强制共享同一个 epoch 函数。
+采用两个独立的 engine 文件：保留原有 `engine_for_finetuning.py`，并新增 `engine_for_dynamic_stage1.py` 承担 Stage 1 的完整 tuple、多项 loss 和重建验证。两个文件共享训练协议和现有工具，但不强制共享同一个 epoch 函数。
 
 #### 推荐目录职责
 
@@ -208,6 +210,24 @@ run_dynamic_stage1.py
 └── 组织 dataset、model、optimizer、engine 和 checkpoint
 ```
 
+`run_dynamic_stage1.py` 以 `run_class_finetuning.py` 为模板，简化伪代码如下：
+
+```python
+def main(args):
+    train_set, val_set, test_set = get_dataset(args)               # 复用 ERP Core dataset 构建逻辑
+    model = get_dynamic_stage1_model(args)                         # 改 model
+    optimizer, scaler, scheduler = build_training_tools(model)     # 保持原流程
+    resume_if_needed(model, optimizer, scaler, args)               # 保持原流程
+
+    for epoch in range(args.start_epoch, args.epochs):
+        train_stats = train_dynamic_stage1_one_epoch(model, train_set, ...)  # 改 engine
+        val_stats = evaluate_dynamic_stage1(model, val_set, ...)             # 改 evaluate
+        if val_stats["missing_mse"] < best_missing_mse:
+            save_checkpoint_best(model, optimizer, scaler)                   # 越低越好
+```
+
+这里不新增重复的 `get_dynamic_dataset()`。`run_dynamic_stage1.py` 也使用 `get_dataset(args)`，底层统一调用 `data_processor/erpcore.py`，各阶段都接收相同顺序的完整 tuple，再由 engine 解包需要的字段。`train/val/test` 仍然必须是三个独立 split，避免训练数据与验证、测试数据混用。
+
 调用关系：
 
 ```text
@@ -231,7 +251,7 @@ run_class_finetuning.py
 → classification loss
 ```
 
-两个 engine 需要保持一致的公共训练行为包括 AMP、梯度累积、LR/weight decay 调度、梯度裁剪、NaN/Inf 检查、日志格式和分布式同步。Stage 1 独立处理字典 batch、Dynamic forward、多项 loss 和 reconstruction 指标；Stage 2 继续使用原分类 engine，并且只读取 `x_obs` 和 `label`。
+两个 engine 需要保持一致的公共训练行为包括 AMP、梯度累积、LR/weight decay 调度、梯度裁剪、NaN/Inf 检查、日志格式和分布式同步。Stage 1 完整解包 tuple 并处理 Dynamic forward、多项 loss 和 reconstruction 指标；Stage 2 继续使用原分类 engine，并且只读取 tuple 前两个字段 `x=x_obs` 和 `label`。
 
 第一版 Stage 1 先启用 `missing` 和 `reg`，其余 loss 保留参数并默认关闭；基础链路稳定后再逐项打开 auxiliary 和 CSLP。
 
@@ -259,17 +279,17 @@ Dynamic 使用独立入口，但复用同一个 LaBraM backbone：
 
 ```python
 class DynamicModel:
-    def forward_stage1(self, batch):
-        h_obs = self.backbone.patch_embed(batch["x_obs"])
+    def forward_stage1(self, x_obs, x_full):
+        h_obs = self.backbone.patch_embed(x_obs)
         h_pred_miss = self.corrector(h_obs, self.prototype)
-        h_miss_target = make_target(batch["x_full"])
+        h_miss_target = make_target(x_full)
         return h_pred_miss, h_miss_target
 
     def forward(self, x_obs):  # Stage 2 分类入口
         h_obs = self.backbone.patch_embed(x_obs)
         h_pred_miss = self.frozen_corrector(h_obs, self.prototype)
         h_complete = merge(h_obs, h_pred_miss)
-        feature = self.backbone.forward_from_tokens(h_complete)【forward_from_tokens是什么意思？】
+        feature = self.backbone.forward_from_tokens(h_complete) #【forward_from_tokens是什么意思？】
         return self.classification_head(feature)
 ```
 
@@ -288,10 +308,11 @@ def train_dynamic_stage1_one_epoch(model, data_loader, optimizer):
 
     for batch in data_loader:
         batch = move_batch_to_device(batch)
+        x, label, x_obs, x_full, subject, task = batch
 
-        with autocast():#【】
-            outputs = model.forward_stage1(batch)
-            losses = compute_dynamic_losses(outputs, batch)
+        with autocast():#【什么意思】
+            outputs = model.forward_stage1(x_obs, x_full)
+            losses = compute_dynamic_losses(outputs, label, subject, task)
             loss = losses["total_loss"]
 
         backward_and_optimizer_step(loss)
@@ -315,7 +336,7 @@ Stage 1 engine → forward_stage1() → dynamic losses
 Stage 2 engine → forward()        → classification loss
 ```
 
-Stage 1 batch 使用 `x_obs`、`x_full`、`subject` 和 `task`；Stage 2 只取 `x_obs` 和 `label`。当前分类 engine 按 `(samples, labels)` 读取 batch，统一 dataset 改成字典后，需要增加一个兼容的 batch 解包函数，但 AMP、梯度累积、optimizer step 和日志逻辑可以继续复用。
+Stage 1 完整解包 `x/label/x_obs/x_full/subject/task`，实际使用 `x_obs`、`x_full`、`subject` 和 `task`；Stage 2 使用 `samples, targets, *_ = batch`，只取 `x=x_obs` 和 `label`。AMP、梯度累积、optimizer step 和日志逻辑可以继续复用。
 
 【`train_one_epoch()` 和 `train_class_batch()` 的关系是什么？】
 
@@ -341,7 +362,10 @@ def train_one_epoch(..., loss_scaler, update_freq, ch_names, input_scale):
     model.train(True)
     clear_gradients(model, optimizer, loss_scaler)
 
-    for data_iter_step, (samples, targets) in enumerate(data_loader):
+    for data_iter_step, batch in enumerate(data_loader):
+        # 兼容原来的 (samples, targets) 和新的完整 tuple。
+        samples, targets, *_ = batch
+
         # 将 EEG 和标签移动到设备；同时完成 input_scale、
         # [B, N, A*T] → [B, N, A, T] reshape 和二分类标签处理。
         samples, targets = prepare_class_batch(
@@ -449,7 +473,7 @@ x_obs
 
 当前仓库需要先处理以下接口前提：
 
-1. `data_processor/erpcore.py` 当前仍返回 `(eeg, label)`，还没有返回计划中定义的 `x_obs`、`x_full`、`subject`、`task` 字典，因此不能直接接入该前向接口。
+1. `data_processor/erpcore.py` 当前仍返回 `(eeg, label)`，还没有返回计划中的完整 tuple `(x, label, x_obs, x_full, subject, task)`，因此不能直接接入 Stage 1 前向接口。
 2. 现有 `modeling_finetune.py` 的 `forward_features()` 已包含静态 prototype 补全和 Transformer 流程。Dynamic Stage 1 建议作为独立 model/wrapper，复用 backbone 的 `patch_embed`，避免改变 N/O/A 的原有入口。
 3. ERP Core 当前配置是 12 个观测导联、28 个目标导联、每个导联 `num_t=1`，因此 Stage 1 的张量形状应保持为：
 
