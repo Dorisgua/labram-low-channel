@@ -259,47 +259,127 @@ run_class_finetuning.py
 
 #### 回答
 
-原来的 LaBraM `forward()` 继续放在 `modeling_finetune.py` 的 `NeuralTransformer` 中，供 N/O/A 使用。简化伪代码如下：
+原来的 LaBraM `forward()` 继续放在 `modeling_finetune.py` 的
+`NeuralTransformer` 中，供 N/O/A 使用。同时在这个类里新增
+`forward_features_from_tokens()`，作为已经得到 latent token 时的特征入口：
 
 ```python
-class NeuralTransformer:
-    def forward(self, x, input_chans=None):
-        feature = self.forward_features(x, input_chans)
-        return self.head(feature)
+class NeuralTransformer(nn.Module):
+    # 新增：输入已经 patch-embedded 的 latent token。
+    def forward_features_from_tokens(self, h, input_chans=None, **kwargs):
+        h = add_cls_channel_time_embedding(h)
+        h = run_transformer_blocks(h)
+        return norm_and_pool_like_original_forward_features(h, **kwargs)
 
+    # 原入口：输入原始 EEG，仍然先经过 patch_embed。
     def forward_features(self, x, input_chans=None):
         h = self.patch_embed(x)
         if self.completion_scope != "none":
             h = static_prototype_complete(h)  # A-End2End
-        h = add_cls_channel_time_embedding(h)
-        return self.transformer(h)
+        return self.forward_features_from_tokens(h, input_chans)
+
+    # 原分类入口保持不变。
+    def forward(self, x, input_chans=None):
+        feature = self.forward_features(x, input_chans)
+        return self.head(feature)
 ```
 
-Dynamic 使用独立入口，但复用同一个 LaBraM backbone：
+Dynamic 使用独立的包装模型，不继承 `NeuralTransformer`。模型内部持有
+`self.backbone`，并明确提供 Stage 1、Stage 2 特征提取和分类入口：
 
 ```python
-class DynamicModel:
+class DynamicModel(nn.Module):
     def forward_stage1(self, x_obs, x_full):
         h_obs = self.backbone.patch_embed(x_obs)
+        h_full = self.backbone.patch_embed(x_full)
         h_pred_miss = self.corrector(h_obs, self.prototype)
-        h_miss_target = make_target(x_full)
+        h_miss_target = select_missing_tokens(h_full)
         return h_pred_miss, h_miss_target
 
-    def forward(self, x_obs):  # Stage 2 分类入口
+    def forward_features(self, x_obs, input_chans=None, **kwargs):
+        # Stage 2：x_obs 仍需经过 patch_embed。
         h_obs = self.backbone.patch_embed(x_obs)
         h_pred_miss = self.frozen_corrector(h_obs, self.prototype)
         h_complete = merge(h_obs, h_pred_miss)
-        feature = self.backbone.forward_from_tokens(h_complete) #【forward_from_tokens是什么意思？】
-        return self.classification_head(feature)
+
+        # h_complete 已是 latent token，从 Transformer 后半段继续执行。
+        return self.backbone.forward_features_from_tokens(
+            h_complete,
+            input_chans=self.target_input_chans_index,
+            pool_token_indices=self.obs_indices if self.pooling_scope == "low" else None,
+            **kwargs,
+        )
+
+    def forward(self, x_obs, input_chans=None, **kwargs):
+        feature = self.forward_features(
+            x_obs,
+            input_chans=input_chans,
+            **kwargs,
+        )
+        return self.backbone.head(feature)
 ```
 
-其中 `forward_from_tokens()` 是计划新增的 token-level helper，表示跳过第二次 `patch_embed`，直接复用原 LaBraM 的 embedding、Transformer blocks 和 normalization。原来的 `NeuralTransformer.forward()` 不需要删除或替换。
+其中 `forward_features_from_tokens()` 是计划新增到 `NeuralTransformer` 的 token-level helper。它接收已经完成 12→28 动态补全的 latent token，跳过 `patch_embed` 和静态 prototype 补全，只执行原 LaBraM 的 CLS/channel/time embedding、Transformer blocks、normalization 和 pooling。下面是该方法在 `NeuralTransformer` 类内部的详细伪代码：
+
+```python
+def forward_features_from_tokens(
+    self,
+    h_complete,
+    input_chans,
+    pool_token_indices=None,
+    return_patch_tokens=False,
+    return_all_tokens=False,
+):
+    # h_complete: [B, target_channels, num_t, embed_dim]
+    batch_size, target_channels_num, input_time_window, _ = h_complete.shape
+    x = h_complete.flatten(1, 2)
+
+    # 后半段与原 forward_features() 保持一致。
+    x = prepend_cls_token(x)
+    x = add_channel_position_embedding(x, input_chans)
+    x = add_time_embedding(x, num_t=h_complete.shape[2])
+
+    for block in self.blocks:
+        x = block(x)
+    x = self.norm(x)
+
+    # 以下返回逻辑与原 forward_features() 保持一致。
+    if self.fc_norm is not None:
+        if return_all_tokens:
+            return self.fc_norm(x)
+
+        patch_tokens = x[:, 1:, :]
+        if return_patch_tokens:
+            return self.fc_norm(patch_tokens)
+
+        if pool_token_indices is not None:
+            patch_tokens = patch_tokens.reshape(
+                batch_size,
+                target_channels_num,
+                input_time_window,
+                self.embed_dim,
+            )
+            patch_tokens = patch_tokens[:, pool_token_indices, :, :]
+            return self.fc_norm(patch_tokens.flatten(1, 2).mean(1))
+
+        return self.fc_norm(patch_tokens.mean(1))
+
+    if return_all_tokens:
+        return x
+    if return_patch_tokens:
+        return x[:, 1:]
+    return x[:, 0]
+```
+
+这里不能再次调用 `patch_embed`，因为 `h_complete` 已经是 patch embedding 后的 latent。原来的 `NeuralTransformer.forward()` 不删除也不替换，继续供 N/O/A 使用；Dynamic Stage 2 则显式调用自己的 `DynamicModel.forward()`。
 
 【然后 engine 里怎么做？】
 
 #### 回答
 
-engine 保留原来的分类训练函数，再增加一个 Stage 1 专用函数。两条路径分别调用不同入口：
+engine 保留原来的分类训练函数，再增加一个 Stage 1 专用函数。`forward_stage1()`
+只在 `engine_for_dynamic_stage1.py` 的 `train_dynamic_stage1_one_epoch()`
+训练循环中显式调用，不会由普通的 `model(...)` 自动调用。两条路径分别调用不同入口：
 
 ```python
 # Dynamic Stage 1
@@ -443,7 +523,7 @@ train_one_epoch()
 
 因此，之前写成统一的 `backward() → optimizer.step()` 只是概念表达，并不等同于当前代码；上面的两个分支才对应当前 engine 的实际结构。
 
-#### model.forward_pretrain()讨论结论
+#### `model.forward_stage1()` 讨论结论
 
 这里先明确 `model.forward_stage1()` 的接口职责，暂不直接新增实现代码。
 
@@ -466,10 +546,10 @@ x_obs
 - `d_sub`、`d_task`：subject/task correction；
 - `h_pred_miss`：缺失导联的预测 latent；
 - `z_sub`、`z_task`、`shared_feature`：供 auxiliary、contrastive 和 CSLP loss 使用；
-- 可选的 `sub_logits`、`task_logits`、`shared_sub_logits`、`shared_task_logits`；
+- 可选的 `sub_logits`、`task_logits`、`shared_sub_logits`、`shared_task_logits`；（这些都先不加）
 - 可选的 `h_miss_target`：由完整 `x_full` 经过同一个 `patch_embed` 后，取出缺失导联位置得到的 latent target。
 
-其中，`h_miss_target` 只用于计算 reconstruction loss，生成时应使用 `torch.no_grad()`，不能让 target 分支参与反向传播。`forward_pretrain()` 不应读取或计算任何 loss weight，也不应执行 Transformer 分类头。
+其中，`h_miss_target` 只用于计算 reconstruction loss，生成时应使用 `torch.no_grad()`，不能让 target 分支参与反向传播。`forward_stage1()` 不应读取或计算任何 loss weight，也不应执行 Transformer 分类头。
 
 当前仓库需要先处理以下接口前提：
 
