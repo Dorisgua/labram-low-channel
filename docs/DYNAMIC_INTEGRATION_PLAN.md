@@ -123,6 +123,7 @@ d_task                 # 必需：task correction
 h_pred_miss            # 必需：预测的缺失导联 latent
 h_miss_target          # 必需：真实完整 EEG 的缺失导联 latent target
 
+以下先都不加
 z_sub                  # 仅在 subject auxiliary/CSLP 开启时需要
 z_task                 # 仅在 task auxiliary/CSLP 开启时需要
 shared_feature         # 仅在 shared auxiliary 开启时需要
@@ -568,132 +569,679 @@ cleanup 版本的 corrector 虽然接收 `p_obs`，但内部目前没有实际�
 
 【engine里是怎么做的？】
 
-## 7. 分阶段实施步骤
 
-### 阶段 0：保护现有基准
+## 7. 具体修改计划与新增伪代码
 
-- 保留当前 AON N/O/A 代码和结果；
-- 在复制版本上工作；
-- 不改变现有脚本默认参数；
-- 记录当前 branch、commit 和结果。
-
-验收标准：N/O/A 的代码入口和结果解释不受 Dynamic 改动影响。
-
-### 阶段 1：统一 ERP Core dataset
-
-- 让 ERP Core dataset 支持完整 batch 字段；
-- 保留原有分类脚本的兼容性；
-- 检查 12/28 导联顺序；
-- 检查 train/val/test subject split；
-- 检查 `input_scale` 和归一化。
-
-验收标准：N/O/A 仍能运行，batch shape 和旧版一致。
-
-### 阶段 2：接入 Stage 1 最小版本
-
-- 加入 Dynamic Stage 1 model；
-- 先实现 `missing MSE + reg`；
-- 保存 checkpoint 和完整 config；
-- 先只跑 ERP Core seed 0。
-
-验收标准：能得到有限的 `h_pred_miss`，`missing_mse` 正常下降，checkpoint 可以重新加载。
-
-### 阶段 3：逐项加入其他 loss
-
-顺序建议为：
+实施顺序：
 
 ```text
-missing MSE
-→ reg
-→ subject/task auxiliary
+保护 N/O/A 基线
+→ 增加 Dynamic 数据接口
+→ 跑通 Stage 1 最小链路
+→ 逐项增加扩展 loss
+→ 抽取 token-level backbone 接口
+→ 接入 Dynamic Stage 2
+→ 公平性检查和多 seed 实验
+```
+
+### 11.1 阶段 0：保护现有 N/O/A 基线
+
+#### 修改位置
+
+- 不修改现有模型和训练逻辑；
+- 新增 `docs/ERP_CORE_BASELINE.md`，记录当前 branch、commit、配置、命令和结果；
+- 保存 N/O/A 的 dry-run 或单 epoch 日志。
+
+#### 需要记录的调用链
+
+```text
+scripts/erp_core/{N,O,A}/*.sh
+→ scripts/erp_core/base.sh
+→ scripts/base.sh
+→ run_class_finetuning.py
+→ engine_for_finetuning.py
+→ modeling_finetune.py
+```
+
+#### 验收条件
+
+- N 输入保持为 12 导联；
+- O 输入保持为 28 导联；
+- A 使用 12 导联输入和静态 28 导联 prototype；
+- 三条路径至少可以完成 dataset 加载和一次模型前向；
+- 后续 Dynamic 改动可以与这一基线进行对照。
+
+### 11.2 阶段 1：统一固定顺序的 tuple 数据接口
+
+#### 修改位置
+
+- 修改 `data_processor/erpcore.py`，让 ERP Core dataset 统一返回第 5 节确定的六字段 tuple；
+- 修改 `engine_for_finetuning.py` 的训练和验证 batch 解包方式，使二字段旧 tuple 和六字段新 tuple 都能兼容；
+- Dynamic Stage 1 对六个字段进行完整解包；
+- 增加 12/28 导联映射检查。
+
+
+#### 计划修改对照伪代码
+
+先补充 12/28 导联定义，并让 loader 同时保存“当前实验输入导联”“观测导联”和“完整目标导联”的索引。下面红色 `-` 是当前代码，绿色 `+` 是计划修改：
+
+```diff
+-from Channels_definition import ERPCORE_30_CHANNELS
++from Channels_definition import (
++    ERPCORE_12_CHANNELS,  # 观测空间：模型实际可见的 12 个 EEG 导联。
++    ERPCORE_28_CHANNELS,  # 目标空间：去掉 HEOG/VEOG 后的 28 个 EEG 导联。
++    ERPCORE_30_CHANNELS,  # 原始空间：simple_data.pt 中保存的 30 个通道。
++)
+
+ class ERPCOREPtLoader(Dataset):
+     def __init__(
+         self,
+         payload,
+         indices,
+         split,
+         mean,
+         std,
+         normalize_method,
+         channel_names,
+         target_samples,
+     ):
+         ...
+         self.channel_names = [str(name).strip().upper() for name in channel_names]
+-        self.channel_indices = np.asarray(
+-            [self.manifest_channel_names.index(name) for name in self.channel_names],
+-            dtype=np.int64,
+-        )
++        self.observed_channel_names = list(ERPCORE_12_CHANNELS)  # 例如第 1 个是 FP1，第 2 个是 FP2。
++        self.target_channel_names = list(ERPCORE_28_CHANNELS)    # 顺序与补全后的 28 导联 token 顺序一致。
++        self.target_channel_indices = np.asarray(               # 记录目标 28 导联在原始 30 通道中的位置。
++            [self.manifest_channel_names.index(name)            # 例如 FP1→0、FP2→14、O2→27。
++             for name in self.target_channel_names],            # 逐个遍历目标 28 导联，保持目标顺序不变。
++            dtype=np.int64,                                     # 作为 PyTorch/NumPy 通道索引使用整数类型。
++        )
++        self.observed_indices_in_target = np.asarray(           # 记录观测 12 导联在目标 28 导联中的位置。
++            [self.target_channel_names.index(name)              # 例如 FP1→0、FP2→14、F3→1。
++             for name in self.observed_channel_names],          # 顺序严格跟随 ERPCORE_12_CHANNELS。
++            dtype=np.int64,                                     # 用于执行 x_full[observed_indices_in_target]。
++        )
++        # 本例 target_channel_indices = [0, 1, 2, ..., 27]，因为 HEOG/VEOG 正好位于原始 30 通道末尾。
++        # 本例 observed_indices_in_target = [0, 14, 1, 16, 2, 17, 4, 21, 6, 23, 10, 27]。
+```
+
+`__getitem__()` 按照当前实现进行下面的替换：
+
+```diff
+     def __getitem__(self, index):
+         global_index = int(self.indices[index])  # 将当前 split 内下标转换成 simple_data.pt 的全局样本下标。
+-        eeg = self.data[global_index, self.channel_indices, :].float()
+-        eeg = self._normalize(eeg)
+-        if eeg.shape[-1] != self.target_samples:
+-            eeg = F.interpolate(
+-                eeg.unsqueeze(0),
++
++        # 先从同一个原始样本取得并归一化完整 28 导联。
++        x_full = self.data[                    # self.data 的原始形状是 [样本数, 30, 256]。
++            global_index,                      # 选择当前样本，例如第 100 个全局样本。
++            self.target_channel_indices,       # 从原始 30 通道取出目标 28 导联。
++            :,                                 # 保留当前导联的全部时间采样点。
++        ].float()                              # 转为 float，得到 [28, 256]。
++        x_full = self._normalize(x_full)       # 使用训练集 28 导联统计量进行归一化。
++
++        if x_full.shape[-1] != self.target_samples:  # 当前源数据为 256 点，LaBraM ERP Core 通常需要 200 点。
++            x_full = F.interpolate(                  # 沿时间维进行线性重采样。
++                x_full.unsqueeze(0),                 # [28, 256] → [1, 28, 256]，增加 batch 维。
+                 size=self.target_samples,            # 将时间长度调整到 200。
+                 mode="linear",                      # 使用一维线性插值。
+                 align_corners=False,                 # 与现有 loader 的插值配置保持一致。
+             ).squeeze(0)                             # [1, 28, 200] → [28, 200]。
+-        if eeg.shape != (len(self.channel_names), self.target_samples):
+-            raise ValueError(f"Unexpected ERP CORE sample shape: {tuple(eeg.shape)}")
+-        if not torch.isfinite(eeg).all():
++
++        x_obs = x_full[self.observed_indices_in_target]  # 按 12 导联既定顺序取得 [12, 200]。
++        x = (                                            # x 是分类 engine 实际读取的第一个字段。
++            x_full                                      # O：使用完整 28 导联作为分类输入。
++            if self.channel_names == self.target_channel_names
++            else x_obs                                  # N/A/Dynamic Stage 2：使用观测 12 导联。
++        )
++
++        if x_full.shape != (28, self.target_samples):
++            raise ValueError(
++                f"Unexpected ERP CORE x_full shape: {tuple(x_full.shape)}"
++            )
++        if x_obs.shape != (12, self.target_samples):
++            raise ValueError(
++                f"Unexpected ERP CORE x_obs shape: {tuple(x_obs.shape)}"
++            )
++        if not torch.isfinite(x_full).all():
+             raise ValueError(f"NaN or Inf in normalized ERP CORE sample {global_index}")
+-        return eeg.contiguous(), int(self.labels[index])
++
++        label = int(self.labels[index])                       # 下游 12 类分类标签，已经经过 TASK_REMAP。
++        subject = int(self.subject_values[global_index])      # 原始 subject 编号，供 auxiliary/CSLP 使用。
++        task = int(self.tasks[global_index])                  # 原始 task 编号；是否重映射需与 cleanup 配置一致。
++        return (
++            x.contiguous(),       # 第 0 项：当前实验主输入，分类 engine 使用 samples 读取。
++            label,                # 第 1 项：下游标签，分类 engine 使用 targets 读取。
++            x_obs.contiguous(),   # 第 2 项：固定 12 导联观测输入。
++            x_full.contiguous(),  # 第 3 项：固定 28 导联完整目标，只允许 Stage 1 使用。
++            subject,              # 第 4 项：subject 标签。
++            task,                 # 第 5 项：task 标签，因此不能再用 batch[-1] 读取 label。
++        )
+```
+
+因为 `_normalize()` 现在处理的是完整 28 导联，训练集统计量也要从“当前实验导联”改为“目标 28 导联”计算：
+
+```diff
+-    channel_indices = np.asarray(
+-        [ERPCORE_30_CHANNELS.index(name) for name in channel_names],
+-        dtype=np.int64,
+-    )
++    target_channel_indices = np.asarray(                           # 目标 28 导联在原始 30 通道中的位置。
++        [ERPCORE_30_CHANNELS.index(name)                            # 例如 FP1→0、FP2→14、O2→27。
++         for name in ERPCORE_28_CHANNELS],                          # HEOG/VEOG 不在目标列表中，因此不会被选中。
++        dtype=np.int64,                                             # _training_statistics() 需要整数索引。
++    )
+     ...
+-    mean, std = _training_statistics(
+-        payload["data"], indices["train"], channel_indices
+-    )
++    mean, std = _training_statistics(
++        payload["data"],          # 原始数据：[样本数, 30, 256]。
++        indices["train"],          # 只使用训练 subject 的样本，避免验证/测试信息泄漏。
++        target_channel_indices,    # 只为目标 28 导联分别计算 mean/std。
++    )
+```
+
+```diff
++def validate_erpcore_sample(sample, observed_indices_in_target):  # 检查统一 tuple 和导联映射。
++    x, label, x_obs, x_full, subject, task = sample               # 按固定六字段顺序完整解包。
++    assert x_obs.shape == (12, 200)                               # 观测输入必须是 12 导联、200 点。
++    assert x_full.shape == (28, 200)                              # 完整目标必须是 28 导联、200 点。
++    assert torch.equal(                                           # 验证 x_obs 确实来自当前 x_full。
++        x_obs,
++        x_full[observed_indices_in_target],                        # 使用例子中的 12 个 target-space 索引。
++    )
++    assert torch.isfinite(x_obs).all()                             # 观测输入不能包含 NaN/Inf。
++    assert torch.isfinite(x_full).all()                            # 完整目标不能包含 NaN/Inf。
+```
+
+分类 engine 的训练循环改为：
+
+```diff
++# engine_for_finetuning.py: train_one_epoch()
+-for data_iter_step, (samples, targets) in enumerate(
+-    metric_logger.log_every(data_loader, print_freq, header)
+-):
++for data_iter_step, batch in enumerate(
++    metric_logger.log_every(data_loader, print_freq, header)
++):
++    samples, targets, *_ = batch
++    # 后续分类训练逻辑保持不变。
+```
+
+分类 engine 的验证循环改为：
+
+```diff
++# engine_for_finetuning.py: evaluate()
+ for step, batch in enumerate(metric_logger.log_every(data_loader, 10, header)):
+-    EEG = batch[0]
+-    target = batch[-1]
++    EEG, target, *_ = batch
++    # 不能再使用 batch[-1]，因为完整 tuple 的最后一个字段是 task。
+```
+
+#### 验收条件
+
+- ERP Core dataset 固定返回 `(x, label, x_obs, x_full, subject, task)`；
+- 分类 engine 使用 `samples, targets, *_ = batch`，同时兼容旧二字段 tuple；
+- Dynamic Stage 1 完整解包六个字段；
+- `x_obs` 必须能够从同一个 `x_full` 按固定索引精确取得；
+- N/A/Dynamic Stage 2 的 `x` 等于 `x_obs`，O 的 `x` 等于 `x_full`；
+- Dynamic Stage 2 只把第一个字段 `x=x_obs` 传入模型；
+- train/val/test split、归一化、采样率和时间长度保持一致；
+- subject/task 映射保存在配置中，可以随 checkpoint 一起追溯。
+
+### 11.3 阶段 2：实现 Dynamic Stage 1 最小链路
+
+#### 新增文件
+
+```text
+modeling_dynamic_stage1.py
+losses_dynamic.py
+engine_for_dynamic_stage1.py
+run_dynamic_stage1.py
+scripts/erp_core/D/stage1.sh
+```
+
+#### `modeling_dynamic_stage1.py`
+
+负责观测 token、corrector 和 reconstruction target，不在模型内部组合 loss。
+
+```diff
++class DynamicStage1Model(nn.Module):
++    def patch_tokens(self, x):
++        # x: [B, C, 200] → [B, C, 1, D]
++        x = x.unsqueeze(2)
++        tokens = self.backbone.patch_embed(x)
++        return tokens.reshape(x.shape[0], x.shape[1], 1, -1)
++
++    def forward_stage1(self, x_obs, x_full):
++        h_obs = self.patch_tokens(x_obs)
++
++        # target 分支不参与反向传播。
++        with torch.no_grad():
++            h_full = self.patch_tokens(x_full)
++            h_miss_target = h_full[:, self.missing_indices]
++
++        p_obs = expand_prototype(
++            self.prototype[self.observed_indices],
++            batch_size=x_obs.shape[0],
++        )
++        p_miss = expand_prototype(
++            self.prototype[self.missing_indices],
++            batch_size=x_obs.shape[0],
++        )
++
++        corrector_outputs = self.corrector(
++            h_obs=h_obs,
++            p_obs=p_obs,
++            p_miss=p_miss,
++        )
++        d_sub = corrector_outputs["d_sub"]
++        d_task = corrector_outputs["d_task"]
++        h_pred_miss = p_miss + d_sub + d_task
++
++        return {
++            "h_obs": h_obs,
++            "p_miss": p_miss,
++            "d_sub": d_sub,
++            "d_task": d_task,
++            "h_pred_miss": h_pred_miss,
++            "h_miss_target": h_miss_target,
++            **corrector_outputs,
++        }
+```
+
+#### `losses_dynamic.py`
+
+第一版只实现 `missing MSE + correction regularization`。
+
+```diff
++def compute_dynamic_losses(outputs, config, epoch):
++    missing_mse = F.mse_loss(
++        outputs["h_pred_miss"],
++        outputs["h_miss_target"],
++    )
++    reg_loss = (
++        outputs["d_sub"].square().mean()
++        + outputs["d_task"].square().mean()
++    )
++    total_loss = (
++        config.missing_weight * missing_mse
++        + config.reg_weight * reg_loss
++    )
++
++    return {
++        "total_loss": total_loss,
++        "missing_mse": missing_mse,
++        "reg_loss": reg_loss,
++    }
+```
+
+#### `engine_for_dynamic_stage1.py`
+
+```diff
++def train_dynamic_stage1_one_epoch(
++    model,
++    data_loader,
++    optimizer,
++    device,
++    epoch,
++    loss_scaler,
++    update_freq,
++    loss_config,
++):
++    model.train(True)
++    optimizer.zero_grad()
++
++    for data_iter_step, batch in enumerate(data_loader):
++        x, label, x_obs, x_full, subject, task = batch
++        x_obs = x_obs.float().to(device, non_blocking=True)
++        x_full = x_full.float().to(device, non_blocking=True)
++        subject = subject.to(device, non_blocking=True)
++        task = task.to(device, non_blocking=True)
++
++        with torch.cuda.amp.autocast():
++            outputs = model.forward_stage1(x_obs, x_full)
++            losses = compute_dynamic_losses(
++                outputs,
++                loss_config,
++                epoch,
++            )
++            loss = losses["total_loss"]
++
++        check_loss_is_finite(loss)
++        loss = loss / update_freq
++        is_update_step = (data_iter_step + 1) % update_freq == 0
++        backward_with_scaler(
++            loss,
++            optimizer,
++            loss_scaler,
++            update_grad=is_update_step,
++        )
++        log_dynamic_losses(losses)
+```
+
+#### `run_dynamic_stage1.py`
+
+```diff
++def main(args):
++    train_set, val_set = build_erpcore_dataset(args)
++    backbone = load_labram_backbone(args.finetune)
++    prototype = load_channel_prototype(args.channel_prototype_path)
++
++    model = DynamicStage1Model(
++        backbone=backbone,
++        prototype=prototype,
++        observed_indices=args.observed_indices,
++        missing_indices=args.missing_indices,
++    )
++    apply_stage1_freeze_policy(model, args)
++    optimizer = build_optimizer_for_trainable_parameters(model, args)
++
++    for epoch in range(args.epochs):
++        train_stats = train_dynamic_stage1_one_epoch(...)
++        val_stats = evaluate_dynamic_stage1(...)
++        save_stage1_checkpoint_and_config(...)
+```
+
+#### Bash 到 Python 的参数映射
+
+```text
+scripts/erp_core/D/stage1.sh
+├── DATA_PATH               → --data_path                → args.data_path
+├── FINETUNE                → --finetune                 → args.finetune
+├── CHANNEL_PROTOTYPE_PATH  → --channel_prototype_path   → args.channel_prototype_path
+├── MISSING_WEIGHT          → --missing_weight           → args.missing_weight
+├── REG_WEIGHT              → --reg_weight               → args.reg_weight
+├── EPOCHS                  → --epochs                   → args.epochs
+├── SEED                    → --seed                     → args.seed
+└── OUTPUT_DIR              → --output_dir               → args.output_dir
+```
+
+#### 验收条件
+
+- `h_obs` 为 `[B, 12, 1, D]`；
+- `h_pred_miss` 和 `h_miss_target` 为 `[B, 16, 1, D]`；
+- 所有输出和 loss 都是有限值；
+- corrector 的可训练参数能够获得梯度；
+- 冻结参数不进入 optimizer；
+- 短训练中 `missing_mse` 有下降趋势；
+- `checkpoint-best.pth` 可以重新加载。
+
+### 11.4 阶段 3：逐项增加扩展 loss
+
+#### 修改位置
+
+- 扩展 `modeling_dynamic_stage1.py` 的返回字段；
+- 扩展 `losses_dynamic.py`；
+- 修改 `engine_for_dynamic_stage1.py`，把完整解包得到的 `subject` 和 `task` 传给 loss；
+- 在 `run_dynamic_stage1.py` 增加 loss 参数；
+- 在 `scripts/erp_core/D/stage1.sh` 增加对应环境变量。
+
+#### 增加顺序
+
+```text
+subject/task auxiliary
 → shared auxiliary
-→ contrastive
-→ close/permute
-→ CSLP
+→ subject/task contrastive
+→ d_sub/d_task close
+→ latent permutation
+→ CSLP ramp
 ```
 
-每次只打开一类 loss，并记录 loss 权重、验证结果和 reconstruction MSE。
+#### 新增伪代码
 
-### 阶段 4：接入 Stage 2 Dynamic
+```diff
++def compute_dynamic_losses(outputs, subject, task, config, epoch):
++    losses = compute_missing_and_reg(outputs, config)
++
++    if config.sub_aux_weight > 0:
++        losses["sub_aux"] = compute_subject_aux(outputs, subject)
++    if config.task_aux_weight > 0:
++        losses["task_aux"] = compute_task_aux(outputs, task)
++    if config.shared_aux_weight > 0:
++        losses["shared_aux"] = compute_shared_aux(outputs, subject, task)
++    if config.contrastive_weight > 0:
++        losses.update(compute_contrastive_losses(outputs, subject, task))
++    if config.permute_weight > 0:
++        losses.update(compute_permutation_losses(outputs, subject, task))
++
++    effective_weights = apply_cslp_ramp(config, epoch)
++    losses["total_loss"] = weighted_sum(losses, effective_weights)
++    return losses
+```
 
-- 在 `run_class_finetuning.py` 增加 Dynamic 模式；
-- 加载 Stage 1 checkpoint/config；
-- 冻结 Stage 1 参数并切换 `eval()`；
-- 使用 `x_obs` 生成补全 token；
-- 接入 AON 原有 Transformer 和分类头；
-- 不使用真实 `x_full`。
+```diff
++# engine_for_dynamic_stage1.py
++losses = compute_dynamic_losses(
++    outputs,
++    subject,
++    task,
++    loss_config,
++    epoch,
++)
+```
 
-验收标准：Dynamic Stage 2 能和 N/A 使用相同分类流程，并能记录 Test Acc、Test BAcc、κ、Weighted F1。
+#### 验收条件
 
-### 阶段 5：公平性核对
+- 所有扩展 loss 默认权重为 `0`；
+- 每次实验只新增一类 loss；
+- batch 中不存在有效 pair 时返回安全的零 loss，不产生 NaN；
+- 日志记录每个 epoch 的实际 loss 权重；
+- 原始 CSLP 四项和 cleanup 扩展项使用不同的配置名称。
 
-逐项比较 AON N/O/A 与 cleanup Dynamic：
+### 11.5 阶段 4：抽取 token-level backbone 接口
 
-- 数据划分；
-- seed；
-- `input_scale`；
-- LaBraM checkpoint；
-- channel order；
-- 分类头；
-- Transformer 训练范围；
-- CNN 和 Stage 1 冻结策略；
-- best Val BAcc / best Val Acc；
-- Test 指标读取方式。
+#### 修改位置
 
-只有差异能够解释时，才进行方法结论比较。
+- 修改 `modeling_finetune.py`；
+- 从现有 `forward_features()` 中抽取 patch embedding 之后的公共逻辑；
+- 原有 `forward()` 和 N/O/A 调用方式保持不变。
 
-### 阶段 6：补齐多 seed 和结果表
+#### 新增伪代码
 
-- 先验证 seed 0；
-- 再跑 seed 1/2；
-- 分别整理 best Val BAcc 和 best Val Acc；
-- 先计算各实验组 Mean ± SD；
-- 再按照 Test Acc、Test BAcc 从高到低排序；
-- 在每张结果表下写对应 bash 和日志目录。
+```diff
++class NeuralTransformer(nn.Module):
++    def patch_tokens(self, x):
++        batch_size, channels, time_windows, _ = x.shape
++        tokens = self.patch_embed(x)
++        return tokens.reshape(
++            batch_size,
++            channels,
++            time_windows,
++            self.embed_dim,
++        )
++
++    def forward_from_tokens(
++        self,
++        tokens,
++        token_input_chans_index,
++        pool_channel_indices=None,
++    ):
++        # tokens: [B, target_channels, time_windows, D]
++        x = tokens.flatten(1, 2)
++        x = self.add_cls_channel_time_embeddings(
++            x,
++            token_input_chans_index,
++            target_channels=tokens.shape[1],
++            time_windows=tokens.shape[2],
++        )
++        x = self.run_transformer_blocks(x)
++        return self.pool_tokens(x, pool_channel_indices)
+```
 
-## 8. 输出和配置要求
+#### 回归检查
 
-每次实验至少保存：
+```diff
++def test_original_forward_matches_token_forward(model, x, input_chans):
++    model.eval()
++    with torch.no_grad():
++        old_output = model.forward_features(x, input_chans=input_chans)
++        tokens = model.patch_tokens(x)
++        new_output = model.forward_from_tokens(tokens, input_chans)
++    torch.testing.assert_close(old_output, new_output)
+```
+
+#### 验收条件
+
+- `forward_from_tokens()` 不重复调用 `patch_embed`；
+- N/O/A 的公开入口和脚本不变；
+- 相同输入和 checkpoint 下，重构前后的 N/O/A 输出一致；
+- position embedding、time embedding 和 pooling 使用正确的 28 导联布局。
+
+### 11.6 阶段 5：接入 Dynamic Stage 2
+
+#### 修改位置
+
+- 新增 Dynamic 分类 wrapper；
+- 修改 `run_class_finetuning.py`，增加 Dynamic 模式；
+- 继续复用 `engine_for_finetuning.py`；
+- 新增 `scripts/erp_core/D/stage2.sh`。
+
+#### Dynamic 分类 wrapper 伪代码
+
+```diff
++class DynamicCompletionClassifier(nn.Module):
++    def forward(self, x_obs, input_chans=None):
++        h_obs = self.backbone.patch_tokens(x_obs)
++
++        with torch.no_grad():
++            corrector_outputs = self.corrector(
++                h_obs=h_obs,
++                p_obs=self.p_obs,
++                p_miss=self.p_miss,
++            )
++            h_pred_miss = (
++                self.p_miss
++                + corrector_outputs["d_sub"]
++                + corrector_outputs["d_task"]
++            )
++
++        h_complete = self.complete_tokens(h_obs, h_pred_miss)
++        feature = self.backbone.forward_from_tokens(
++            h_complete,
++            token_input_chans_index=self.target_input_chans_index,
++            pool_channel_indices=self.pool_channel_indices,
++        )
++        return self.classification_head(feature)
++
++    def train(self, mode=True):
++        super().train(mode)
++        # 分类 engine 调用 model.train(True) 后，corrector 仍保持 eval。
++        self.corrector.eval()
++        return self
+```
+
+```diff
++def complete_tokens(self, h_obs, h_pred_miss):
++    h_complete = h_obs.new_empty(
++        h_obs.shape[0],
++        28,
++        h_obs.shape[2],
++        h_obs.shape[3],
++    )
++    h_complete[:, self.observed_indices] = h_obs
++    h_complete[:, self.missing_indices] = h_pred_miss
++    return h_complete
+```
+
+#### `run_class_finetuning.py` 新增逻辑
+
+```diff
++if args.completion_mode == "dynamic":
++    if not args.stage1_checkpoint:
++        raise ValueError("Dynamic Stage 2 requires --stage1_checkpoint")
++
++    stage1_checkpoint = torch.load(
++        args.stage1_checkpoint,
++        map_location="cpu",
++    )
++    validate_stage1_checkpoint_config(
++        stage1_checkpoint,
++        observed_ch_names=ch_names,
++        target_ch_names=ERPCORE_28_CHANNELS,
++    )
++    model = build_dynamic_completion_classifier(
++        backbone=model,
++        stage1_checkpoint=stage1_checkpoint,
++    )
++    freeze_corrector_and_auxiliary_heads(model)
+```
+
+#### Bash 到 Python 的参数映射
 
 ```text
-run.log
-config.json
-metrics.csv 或 log.txt
-checkpoint-best.pth
-checkpoint-last.pth
+scripts/erp_core/D/stage2.sh
+├── DATA_PATH          → --data_path          → args.data_path
+├── FINETUNE           → --finetune           → args.finetune
+├── STAGE1_CHECKPOINT  → --stage1_checkpoint  → args.stage1_checkpoint
+├── COMPLETION_MODE    → --completion_mode    → args.completion_mode
+├── FREEZE_CORRECTOR   → --freeze_corrector   → args.freeze_corrector
+├── BEST_METRIC        → --best_metric        → args.best_metric
+├── SEED               → --seed               → args.seed
+└── OUTPUT_DIR         → --output_dir         → args.output_dir
 ```
 
-配置中记录：
+#### 验收条件
 
-- dataset、seed、split；
-- observed/target channel names 和顺序；
-- `input_scale`；
-- LaBraM checkpoint；
-- Prototype checkpoint；
-- completion mode；
-- Stage 1 checkpoint；
-- loss weights；
-- best metric；
-- trainable/frozen parameter 范围。
+- Stage 2 只接收 `x_obs` 和 `label`；
+- Stage 2 前向不读取 `x_full`；
+- corrector 参数不进入 optimizer；
+- corrector 在分类训练期间始终保持 `eval()`；
+- `h_complete` 为 `[B, 28, 1, D]`；
+- logits 为 `[B, 12]`；
+- Stage 2 使用原有分类 engine 和统一评价指标。
 
-## 9. 当前不做的事情
+### 11.7 阶段 6：公平性检查和多 seed 实验
 
-- 不立即合并 Git-Diff-clean-upload 的整个目录；
-- 不立即改所有数据集；
-- 不把 Stage 1 和 Stage 2 强行写进同一个训练循环；
-- 不改变现有 N/O/A 的历史结果；
-- 不用 Test 集最高分代替验证集 checkpoint 选择；
-- 不把数据、checkpoint 和大规模 outputs 提交到代码仓库。
+#### 修改位置
 
-## 10. 完成标准
+- 新增或补充 `docs/ERP_CORE_EXPERIMENTS.md`；
+- 不再修改核心模型接口；
+- 固定 seed 0 验证后的正式配置。
 
-满足以下条件后，才认为 Dynamic 已经正式进入 AON：
+#### 需要核对的实验字段
 
-1. AON 原有 N/O/A 可以正常运行；
-2. Stage 1 可以独立训练并保存可追溯 checkpoint；
-3. Stage 2 可以加载冻结的 Stage 1；
-4. Dynamic Stage 2 只使用观测导联；
-5. Dynamic 与 N/O/A 使用统一的分类和评价流程；
-6. seed 0 结果能够复现或解释；
-7. seed 1/2 能够使用同一套脚本运行；
-8. README 能说明每组实验的目的、命令、结果和结论。
+```text
+dataset split
+seed
+input_scale
+normalization
+observed/target channel order
+LaBraM checkpoint
+prototype checkpoint
+Stage 1 checkpoint
+CNN/Transformer/corrector 冻结范围
+optimizer 和 learning rate
+epochs
+best_metric
+Test 指标读取方式
+```
+
+#### seed 对应关系
+
+```text
+Stage 1 seed 0 → Stage 2 seed 0
+Stage 1 seed 1 → Stage 2 seed 1
+Stage 1 seed 2 → Stage 2 seed 2
+```
+
+#### 验收条件
+
+- 主比较中 N/O/A/D 使用相同分类协议；
+- checkpoint 只由验证集 `balanced_accuracy` 选择；
+- Test 集不参与 checkpoint 选择；
+- seed 0/1/2 使用相同超参数；
+- 每个结果可以追溯到 Bash、config、日志和 checkpoint；
+- 最终报告每个 seed 的结果及 Mean ± SD。
