@@ -46,14 +46,21 @@ LaBraM-unified-AON-dynamic/
 ├── modeling_finetune.py             # 原有 LaBraM backbone 和分类模型
 ├── modeling_dynamic_stage1.py       # Dynamic Stage 1 模型
 ├── losses_dynamic.py                # Stage 1 各项 loss
-├── engine_for_dynamic_stage1.py     # Stage 1 训练、验证、日志【为什么一定要一个新的engine呢？】【stage2不需要新的engine么】
+├── engine_for_finetuning.py         # 共享 Stage 1/Stage 2 训练、验证和日志
 ├── data_processor/erpcore.py        # 统一 ERP Core 数据接口
-├── scripts/erp_core/【还是保持N的文件夹里有两个，1个freeze cnn 一个full finetune】
-│   ├── N...sh
-│   ├── O...sh
-│   ├── A...sh
-│   ├── D_stage1...sh
-│   └── D_stage2...sh
+├── scripts/erp_core/
+│   ├── N/
+│   │   ├── freeze_cnn.sh
+│   │   └── full_finetune.sh
+│   ├── O/
+│   │   ├── freeze_cnn.sh
+│   │   └── full_finetune.sh
+│   ├── A/
+│   │   ├── freeze_cnn.sh
+│   │  
+│   └── D/
+│       ├── stage1.sh
+│       └── stage2.sh
 └── docs/
     ├── DYNAMIC_INTEGRATION_PLAN.md
     └── ERP_CORE_EXPERIMENTS.md
@@ -84,8 +91,7 @@ ERP Core dataset 统一返回字典：
 | Dynamic Stage 1 | `x_obs`、`x_full`、`subject`、`task`，必要时使用 `label` |
 | Dynamic Stage 2 | `x_obs`、`label`、冻结的 Stage 1 |
 
-Dynamic Stage 2 绝不能使用真实的 `x_full`，否则会造成信息泄漏。
-【我觉得太麻烦了，不如都输出，只是接收端拿走需要的】
+统一 dataset 可以返回全部字段；由不同训练阶段的接收端选择需要的字段。为了避免信息泄漏，Dynamic Stage 2 的前向和 loss 代码只能读取 `x_obs`，不能读取 `x_full`。`x_full` 只用于 Stage 1 生成 `h_miss_target`，或用于离线审计。
 
 ## 6. Stage 1 模型和 loss 的职责
 
@@ -107,20 +113,23 @@ x_obs
 建议返回：
 
 ```text
-h_obs
-p_miss
-d_sub
-d_task
-h_pred_miss
-z_sub
-z_task
-shared_feature
-sub_logits
-task_logits
-shared_sub_logits
-shared_task_logits
-h_miss_target【这是什么意思：取出的“缺失导联 latent target”】
+h_obs                  # 必需：观测导联的 latent token
+p_miss                 # 必需：缺失导联的 prototype token
+d_sub                  # 必需：subject correction
+d_task                 # 必需：task correction
+h_pred_miss            # 必需：预测的缺失导联 latent
+h_miss_target          # 必需：真实完整 EEG 的缺失导联 latent target
+
+z_sub                  # 仅在 subject auxiliary/CSLP 开启时需要
+z_task                 # 仅在 task auxiliary/CSLP 开启时需要
+shared_feature         # 仅在 shared auxiliary 开启时需要
+sub_logits             # 仅在 sub_aux_weight > 0 时需要
+task_logits            # 仅在 task_aux_weight > 0 时需要
+shared_sub_logits      # 仅在 shared_sub_aux_weight > 0 时需要
+shared_task_logits     # 仅在 shared_task_aux_weight > 0 时需要
 ```
+
+`h_miss_target` 是真实 `x_full` 经过同一个 patch embedding 后，取出缺失导联位置得到的 latent target。它只用于计算缺失导联重建误差，不是分类标签，也不能作为 Dynamic Stage 2 的输入。
 
 ### 6.2 `losses_dynamic.py`
 
@@ -132,18 +141,53 @@ h_miss_target【这是什么意思：取出的“缺失导联 latent target”�
 - shared auxiliary loss；
 - subject/task contrastive loss；
 - close/permute loss；
-- CSLP loss；【这是什么意思？】
+- CSLP loss；CSLP 是 **Contrastive Split-Latent Permutation**，即“对比学习 + 拆分 latent + 置换重建”。它约束 `d_sub` 主要表示 subject 信息、`d_task` 主要表示 task 信息，并通过交换这两类 correction 检查表示是否可组合；
 - `total_loss`。
 
-loss 权重和 CSLP ramp 不应写进模型 forward。【ramp是什么？】
+核心公式（符号与 cleanup 实现对应）如下：
 
-### 6.3 `engine_for_dynamic_stage1.py`
+```text
+h_pred_miss = p_miss + d_sub + d_task
+
+L_missing = MSE(h_pred_miss, h_miss_target)
+L_reg     = mean(d_sub^2) + mean(d_task^2)
+
+L_sub_aux    = CE(sub_logits, subject)
+L_task_aux   = CE(task_logits, task)
+L_shared_aux = CE(shared_sub_logits, subject)
+              + CE(shared_task_logits, task)
+
+L_sub_contra_s  = InfoNCE(z_sub^i, z_sub^j)     # 同 subject 配对
+L_task_contra_t = InfoNCE(z_task^i, z_task^j)    # 同 task 配对
+L_d_sub_close   = InfoNCE(d_sub^i, d_sub^j)
+L_d_task_close  = InfoNCE(d_task^i, d_task^j)
+
+L_latent_permute_s = 1/2 * [
+    MSE(p_miss^i + d_sub^j + d_task^i, h_miss_target^i)
+  + MSE(p_miss^j + d_sub^i + d_task^j, h_miss_target^j)]
+
+L_latent_permute_t = 1/2 * [
+    MSE(p_miss^i + d_sub^i + d_task^j, h_miss_target^i)
+  + MSE(p_miss^j + d_sub^j + d_task^i, h_miss_target^j)]
+
+L_total = Σ_k w_k L_k
+```
+
+其中 `i、j` 是按照相同 subject 或相同 task 组成的样本对；实际启用哪些项由对应的 loss weight 决定。当前 cleanup 中 close/permute 的具体实现和权重以迁移后的测试结果为准，不能只根据公式推断效果。
+
+CSLP-AE 原始论文命令启用的核心 loss 是四项：`sub_contra_s`、`task_contra_t`、`latent_permute_s` 和 `latent_permute_t`，分别对应 subject/task latent 的对比损失和 subject/task latent 置换重建损失。原始命令没有启用 `recon`、`restored_permute`、`content`、监督交叉熵或 quadruplet permutation。当前 cleanup 版本在这四项基础上又提供了 `missing MSE`、`reg`、`d_sub_close`、`d_task_close`、`d_sub_permute` 和 `d_task_permute`，因此不能把 cleanup 的完整 loss 组合直接等同于原始 CSLP-AE 的四项组合。
+
+loss 权重和 CSLP ramp 不应写进模型 forward。`ramp` 指“渐进启用”：训练前若干 epoch 将 CSLP 相关 loss 的系数从 0 逐步增加到配置值，避免模型一开始同时受到分类、重建和对比约束的强烈扰动。例如 `start_epoch=5、ramp_epochs=10` 时，第 5 个 epoch 开始启用，第 14 个 epoch 达到完整权重；若 `ramp_epochs <= 0`，则直接使用完整权重。
+
+### 6.3 共享训练 engine
+
+不需要为 Stage 2 再复制一个新的 engine。建议继续使用 AON 的 `engine_for_finetuning.py`：保留原有 N/O/A 的分类训练和验证函数，再增加 Stage 1 专用的训练函数。这样 Stage 1 和 Stage 2 共享 AMP、梯度累积、日志、验证指标和 checkpoint 工具，但分别使用自己的 batch 读取和 loss 计算逻辑。
 
 负责：
 
 ```text
 batch
-→ model.forward()
+→ Stage 1 model.forward_pretrain()
 → compute_dynamic_losses()
 → total_loss.backward()
 → optimizer.step()
@@ -151,7 +195,12 @@ batch
 → 保存 checkpoint
 ```
 
+Stage 2 仍走同一个 engine 中已有的分类流程：`x_obs → Dynamic completion → Transformer/classification head → logits`。它只读取观测导联和冻结的 Stage 1 参数，不读取 `x_full`，因此不需要额外的 Stage 2 engine。
+
 第一版可以先启用 `missing` 和 `reg`，其余 loss 保留参数并默认关闭；基础链路稳定后再逐项打开 auxiliary 和 CSLP。
+
+
+【帮我写一下model.forward_pretrain()】
 
 ## 7. 分阶段实施步骤
 
@@ -282,4 +331,3 @@ checkpoint-last.pth
 6. seed 0 结果能够复现或解释；
 7. seed 1/2 能够使用同一套脚本运行；
 8. README 能说明每组实验的目的、命令、结果和结论。
-
