@@ -10,7 +10,13 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from Channels_definition import ERPCORE_30_CHANNELS
+"""from Channels_definition import ERPCORE_30_CHANNELS"""
+
+from Channels_definition import (
+    ERPCORE_12_CHANNELS,
+    ERPCORE_28_CHANNELS,
+    ERPCORE_30_CHANNELS,
+)
 
 
 SOURCE_SAMPLING_RATE = 256
