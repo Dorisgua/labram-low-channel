@@ -199,8 +199,88 @@ Stage 2 仍走同一个 engine 中已有的分类流程：`x_obs → Dynamic com
 
 第一版可以先启用 `missing` 和 `reg`，其余 loss 保留参数并默认关闭；基础链路稳定后再逐项打开 auxiliary 和 CSLP。
 
+【那么原来的labram的forward入口放在哪里？】
 
-【帮我写一下model.forward_pretrain()】
+#### 回答
+
+原来的 LaBraM `forward()` 继续放在 `modeling_finetune.py` 的 `NeuralTransformer` 中，供 N/O/A 使用。简化伪代码如下：
+
+```python
+class NeuralTransformer:
+    def forward(self, x, input_chans=None):
+        feature = self.forward_features(x, input_chans)
+        return self.head(feature)
+
+    def forward_features(self, x, input_chans=None):
+        h = self.patch_embed(x)
+        if self.completion_scope != "none":
+            h = static_prototype_complete(h)  # A-End2End
+        h = add_cls_channel_time_embedding(h)
+        return self.transformer(h)
+```
+
+Dynamic 使用独立入口，但复用同一个 LaBraM backbone：
+
+```python
+class DynamicModel:
+    def forward_stage1(self, batch):
+        h_obs = self.backbone.patch_embed(batch["x_obs"])
+        h_pred_miss = self.corrector(h_obs, self.prototype)
+        h_miss_target = make_target(batch["x_full"])
+        return h_pred_miss, h_miss_target
+
+    def forward(self, x_obs):  # Stage 2 分类入口
+        h_obs = self.backbone.patch_embed(x_obs)
+        h_pred_miss = self.frozen_corrector(h_obs, self.prototype)
+        h_complete = merge(h_obs, h_pred_miss)
+        feature = self.backbone.forward_from_tokens(h_complete)【forward_from_tokens是什么意思？】
+        return self.classification_head(feature)
+```
+
+其中 `forward_from_tokens()` 是计划新增的 token-level helper，表示跳过第二次 `patch_embed`，直接复用原 LaBraM 的 embedding、Transformer blocks 和 normalization。原来的 `NeuralTransformer.forward()` 不需要删除或替换。
+
+#### model.forward_pretrain()讨论结论
+
+这里先明确 `model.forward_stage1()` 的接口职责，暂不直接新增实现代码。
+
+`forward_stage1()` 只负责 Dynamic Stage 1 的前向计算，不负责计算 loss、组合 loss 权重或执行 optimizer。建议调用链如下：
+
+```text
+x_obs
+→ patch_embed
+→ h_obs
+→ p_obs / p_miss
+→ corrector
+→ z_sub / z_task / d_sub / d_task / shared_feature
+→ h_pred_miss = p_miss + d_sub + d_task
+```
+
+建议返回以下中间结果：
+
+- `h_obs`：观测导联的 latent token；
+- `p_miss`：缺失导联的 prototype token；
+- `d_sub`、`d_task`：subject/task correction；
+- `h_pred_miss`：缺失导联的预测 latent；
+- `z_sub`、`z_task`、`shared_feature`：供 auxiliary、contrastive 和 CSLP loss 使用；
+- 可选的 `sub_logits`、`task_logits`、`shared_sub_logits`、`shared_task_logits`；
+- 可选的 `h_miss_target`：由完整 `x_full` 经过同一个 `patch_embed` 后，取出缺失导联位置得到的 latent target。
+
+其中，`h_miss_target` 只用于计算 reconstruction loss，生成时应使用 `torch.no_grad()`，不能让 target 分支参与反向传播。`forward_pretrain()` 不应读取或计算任何 loss weight，也不应执行 Transformer 分类头。
+
+当前仓库需要先处理以下接口前提：
+
+1. `data_processor/erpcore.py` 当前仍返回 `(eeg, label)`，还没有返回计划中定义的 `x_obs`、`x_full`、`subject`、`task` 字典，因此不能直接接入该前向接口。
+2. 现有 `modeling_finetune.py` 的 `forward_features()` 已包含静态 prototype 补全和 Transformer 流程。Dynamic Stage 1 建议作为独立 model/wrapper，复用 backbone 的 `patch_embed`，避免改变 N/O/A 的原有入口。
+3. ERP Core 当前配置是 12 个观测导联、28 个目标导联、每个导联 `num_t=1`，因此 Stage 1 的张量形状应保持为：
+
+   ```text
+   h_obs          [B, 12, 1, D]
+   p_miss         [B, 16, 1, D]
+   h_pred_miss    [B, 16, 1, D]
+   h_miss_target  [B, 16, 1, D]
+   ```
+
+cleanup 版本的 corrector 虽然接收 `p_obs`，但内部目前没有实际使用它，只使用 `h_obs` 和 `p_miss`。第一版建议保留这个参数以维持接口一致，是否让 corrector 显式使用 `p_obs` 可以在最小链路验证后再决定。
 
 ## 7. 分阶段实施步骤
 
