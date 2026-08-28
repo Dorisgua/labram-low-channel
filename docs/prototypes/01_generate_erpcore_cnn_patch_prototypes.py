@@ -122,7 +122,11 @@ def main():
     channel_count = torch.zeros(len(ch_names), device=device, dtype=torch.float64)
     num_patches = None
 
-    for step, (samples, _) in enumerate(data_loader):
+    # 旧逻辑只支持 (samples, label) 二字段 tuple：
+    # for step, (samples, _) in enumerate(data_loader):
+    # 新逻辑兼容 ERP Core 的完整六字段 tuple。
+    for step, batch in enumerate(data_loader):
+        samples, _, *_ = batch
         if samples.shape[1] != len(ch_names):
             raise ValueError(f"Expected {len(ch_names)} channels, got {samples.shape[1]}")
         samples = samples.float().to(device, non_blocking=True)
@@ -177,4 +181,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

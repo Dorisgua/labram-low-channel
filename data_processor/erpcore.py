@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections import Counter
+import random
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, default_collate
 
 """from Channels_definition import ERPCORE_30_CHANNELS"""
 
@@ -109,16 +110,37 @@ class ERPCOREPtLoader(Dataset):
         self.normalize_method = normalize_method
         self.manifest_channel_names = list(ERPCORE_30_CHANNELS)
         self.channel_names = [str(name).strip().upper() for name in channel_names]
-        self.channel_indices = np.asarray(
-            [self.manifest_channel_names.index(name) for name in self.channel_names],
+        # 旧逻辑只保存当前实验输入导联在原始 30 通道中的索引：
+        # self.channel_indices = np.asarray(
+        #     [self.manifest_channel_names.index(name) for name in self.channel_names],
+        #     dtype=np.int64,
+        # )
+        # 固定 12 导联观测空间和 28 导联目标空间，并分别计算它们在
+        # 原始 30 通道及目标 28 通道中的位置，保证后续抽取顺序一致。
+        self.observed_channel_names = list(ERPCORE_12_CHANNELS)
+        self.full_channel_names = list(ERPCORE_28_CHANNELS)
+        self.full_channel_indices = np.asarray(
+            [self.manifest_channel_names.index(name) for name in self.full_channel_names],
             dtype=np.int64,
         )
+        self.observed_indices_in_full = np.asarray(
+            [self.full_channel_names.index(name) for name in self.observed_channel_names],
+            dtype=np.int64,
+        )
+        self.use_full_input = self.channel_names == self.full_channel_names
         self.mean = torch.as_tensor(mean, dtype=torch.float32)
         self.std = torch.as_tensor(std, dtype=torch.float32)
         self.target_samples = int(target_samples)
         self.labels = np.asarray([TASK_REMAP[int(self.tasks[idx])] for idx in self.indices], dtype=np.int64)
         self.label_counts = Counter(int(value) for value in self.labels)
         self.subjects = tuple(sorted({int(self.subject_values[idx]) for idx in self.indices}))
+        
+        self.subject_indices = defaultdict(list) # 该 subject 对应的样本位置
+        self.task_indices = defaultdict(list)
+        for local_index, (global_index, task) in enumerate(zip(self.indices, self.labels)):
+            subject = int(self.subject_values[int(global_index)]) # 根据全局索引查出该样本属于哪个 subject。
+            self.subject_indices[subject].append(local_index)  # e.g.subject_indices[3] = [0, 5, 9, 12]
+            self.task_indices[int(task)].append(local_index)
 
     def __len__(self):
         return len(self.indices)
@@ -138,20 +160,98 @@ class ERPCOREPtLoader(Dataset):
 
     def __getitem__(self, index):
         global_index = int(self.indices[index])
-        eeg = self.data[global_index, self.channel_indices, :].float()
-        eeg = self._normalize(eeg)
-        if eeg.shape[-1] != self.target_samples:
-            eeg = F.interpolate(
-                eeg.unsqueeze(0),
+        # 旧逻辑只读取当前实验需要的导联，并只返回 (eeg, label)：
+        # eeg = self.data[global_index, self.channel_indices, :].float()
+        # eeg = self._normalize(eeg)
+        # if eeg.shape[-1] != self.target_samples:
+        #     eeg = F.interpolate(
+        #         eeg.unsqueeze(0),
+        #         size=self.target_samples,
+        #         mode="linear",
+        #         align_corners=False,
+        #     ).squeeze(0)
+        # if eeg.shape != (len(self.channel_names), self.target_samples):
+        #     raise ValueError(f"Unexpected ERP CORE sample shape: {tuple(eeg.shape)}")
+        # if not torch.isfinite(eeg).all():
+        #     raise ValueError(f"NaN or Inf in normalized ERP CORE sample {global_index}")
+        # return eeg.contiguous(), int(self.labels[index])
+
+        # 从同一个原始样本先生成归一化、重采样后的 28 导联 x_full，
+        # 再按固定索引抽取 12 导联 x_obs，避免两种输入的预处理不一致。
+        x_full = self.data[global_index, self.full_channel_indices, :].float()
+        x_full = self._normalize(x_full)
+        if x_full.shape[-1] != self.target_samples:
+            x_full = F.interpolate(
+                x_full.unsqueeze(0),
                 size=self.target_samples,
                 mode="linear",
                 align_corners=False,
             ).squeeze(0)
-        if eeg.shape != (len(self.channel_names), self.target_samples):
-            raise ValueError(f"Unexpected ERP CORE sample shape: {tuple(eeg.shape)}")
-        if not torch.isfinite(eeg).all():
+        if x_full.shape != (len(self.full_channel_names), self.target_samples):
+            raise ValueError(f"Unexpected ERP CORE x_full shape: {tuple(x_full.shape)}")
+        if not torch.isfinite(x_full).all():
             raise ValueError(f"NaN or Inf in normalized ERP CORE sample {global_index}")
-        return eeg.contiguous(), int(self.labels[index])
+
+        x_obs = x_full[self.observed_indices_in_full]
+        if x_obs.shape != (len(self.observed_channel_names), self.target_samples):
+            raise ValueError(f"Unexpected ERP CORE x_obs shape: {tuple(x_obs.shape)}")
+
+        # O 将 x_full 作为主输入，其余实验将 x_obs 作为主输入；所有实验
+        # 统一返回 (x, label, x_obs, x_full, subject, task)。
+        x = x_full if self.use_full_input else x_obs
+        label = int(self.labels[index])
+        subject = int(self.subject_values[global_index])
+        task = label
+        return (
+            x.contiguous(),
+            label,
+            x_obs.contiguous(),
+            x_full.contiguous(),
+            subject,
+            task,
+        )
+        """  (
+            x,        # [B, 12, 200]
+            label,    # [B]
+            x_obs,    # [B, 12, 200]
+            x_full,   # [B, 28, 200]
+            subject,  # [B]
+            task,     # [B]
+        )"""
+
+    def sample_cslpae_pair_batch(self, property_name, batch_size):
+        """按完整 split 的 subject/task 索引随机构造 CSLP-AE 样本对。"""
+        if property_name == "subject":
+            index_by_value = self.subject_indices
+        elif property_name == "task":
+            index_by_value = self.task_indices
+        else:
+            raise ValueError(f"Unsupported pair property: {property_name}")
+
+        values = sorted(index_by_value)
+        if not values:
+            raise ValueError(f"No values available for property: {property_name}")
+
+        samples_per_repeat = len(values)
+        repeats = max(int(batch_size) // (2 * samples_per_repeat), 1)
+        left_indices = []
+        right_indices = []
+        for _ in range(repeats):
+            for value in values:
+                candidates = index_by_value[value]
+                if len(candidates) >= 2:
+                    left, right = random.sample(candidates, 2)
+                else:
+                    left = right = candidates[0]
+                left_indices.append(left)
+                right_indices.append(right)
+
+        return (
+            default_collate([self[index] for index in left_indices]),
+            default_collate([self[index] for index in right_indices]),
+            repeats,
+            samples_per_repeat,
+        )
 
 
 def prepare_ERPCORE_pt_dataset(
@@ -174,14 +274,33 @@ def prepare_ERPCORE_pt_dataset(
     if tuple(payload["data"].shape[1:]) != (len(ERPCORE_30_CHANNELS), SOURCE_SAMPLES):
         raise ValueError(f"Unexpected ERP CORE data shape: {tuple(payload['data'].shape)}")
 
-    channel_names = list(ERPCORE_30_CHANNELS if channel_names is None else channel_names)
+    # 旧逻辑默认读取原始 30 通道：
+    # channel_names = list(ERPCORE_30_CHANNELS if channel_names is None else channel_names)
+    # 新逻辑默认使用去掉 HEOG/VEOG 后的 28 导联目标空间。
+    channel_names = list(ERPCORE_28_CHANNELS if channel_names is None else channel_names)
     channel_names = [str(name).strip().upper() for name in channel_names]
     unknown = [name for name in channel_names if name not in ERPCORE_30_CHANNELS]
     if unknown:
         raise ValueError(f"Unknown ERP CORE channel names: {unknown}")
     if len(set(channel_names)) != len(channel_names):
         raise ValueError(f"Duplicate ERP CORE channel names: {channel_names}")
-    channel_indices = np.asarray([ERPCORE_30_CHANNELS.index(name) for name in channel_names], dtype=np.int64)
+    # 旧逻辑根据当前 channel_names 生成索引：
+    # channel_indices = np.asarray(
+    #     [ERPCORE_30_CHANNELS.index(name) for name in channel_names],
+    #     dtype=np.int64,
+    # )
+    # 只接受实验协议中的 12/28 导联布局，并生成目标 28 导联在
+    # 原始 30 通道中的索引，用于统一计算 x_full 的训练集统计量。
+    supported_channel_layouts = {
+        tuple(ERPCORE_12_CHANNELS),
+        tuple(ERPCORE_28_CHANNELS),
+    }
+    if tuple(channel_names) not in supported_channel_layouts:
+        raise ValueError(
+            "ERP CORE channel_names must equal ERPCORE_12_CHANNELS or "
+            "ERPCORE_28_CHANNELS"
+        )
+    full_channel_indices = np.asarray([ERPCORE_30_CHANNELS.index(name) for name in ERPCORE_28_CHANNELS], dtype=np.int64)
 
     target_samples = int(sampling_rate)
     if target_samples not in {200, SOURCE_SAMPLES}:
@@ -205,7 +324,12 @@ def prepare_ERPCORE_pt_dataset(
         split_lengths = {split: len(values) for split, values in indices.items()}
         raise ValueError(f"Empty ERP CORE split: {split_lengths}")
 
-    mean, std = _training_statistics(payload["data"], indices["train"], channel_indices)
+    # 旧逻辑只为当前实验输入导联计算统计量：
+    # mean, std = _training_statistics(
+    #     payload["data"], indices["train"], channel_indices
+    # )
+    # 只用训练 split 为目标 28 导联计算 mean/std，val/test 共用该统计量。
+    mean, std = _training_statistics(payload["data"], indices["train"], full_channel_indices)
     datasets = {
         split: ERPCOREPtLoader(
             payload,
@@ -233,4 +357,3 @@ def prepare_ERPCORE_pt_dataset(
         f"test_labels={dict(datasets['test'].label_counts)}"
     )
     return datasets["train"], datasets["test"], datasets["val"]
-

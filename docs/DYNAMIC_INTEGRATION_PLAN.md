@@ -652,19 +652,19 @@ scripts/erp_core/{N,O,A}/*.sh
 -            dtype=np.int64,
 -        )
 +        self.observed_channel_names = list(ERPCORE_12_CHANNELS)  # 例如第 1 个是 FP1，第 2 个是 FP2。
-+        self.target_channel_names = list(ERPCORE_28_CHANNELS)    # 顺序与补全后的 28 导联 token 顺序一致。
-+        self.target_channel_indices = np.asarray(               # 记录目标 28 导联在原始 30 通道中的位置。
++        self.full_channel_names = list(ERPCORE_28_CHANNELS)      # 完整数据使用固定的 28 导联顺序。
++        self.full_channel_indices = np.asarray(                 # 记录完整 28 导联在原始 30 通道中的位置。
 +            [self.manifest_channel_names.index(name)            # 例如 FP1→0、FP2→14、O2→27。
-+             for name in self.target_channel_names],            # 逐个遍历目标 28 导联，保持目标顺序不变。
++             for name in self.full_channel_names],              # 逐个遍历完整 28 导联，保持既定顺序不变。
 +            dtype=np.int64,                                     # 作为 PyTorch/NumPy 通道索引使用整数类型。
 +        )
-+        self.observed_indices_in_target = np.asarray(           # 记录观测 12 导联在目标 28 导联中的位置。
-+            [self.target_channel_names.index(name)              # 例如 FP1→0、FP2→14、F3→1。
++        self.observed_indices_in_full = np.asarray(             # 记录观测 12 导联在完整 28 导联中的位置。
++            [self.full_channel_names.index(name)                # 例如 FP1→0、FP2→14、F3→1。
 +             for name in self.observed_channel_names],          # 顺序严格跟随 ERPCORE_12_CHANNELS。
-+            dtype=np.int64,                                     # 用于执行 x_full[observed_indices_in_target]。
++            dtype=np.int64,                                     # 用于执行 x_full[observed_indices_in_full]。
 +        )
-+        # 本例 target_channel_indices = [0, 1, 2, ..., 27]，因为 HEOG/VEOG 正好位于原始 30 通道末尾。
-+        # 本例 observed_indices_in_target = [0, 14, 1, 16, 2, 17, 4, 21, 6, 23, 10, 27]。
++        # 本例 full_channel_indices = [0, 1, 2, ..., 27]，因为 HEOG/VEOG 正好位于原始 30 通道末尾。
++        # 本例 observed_indices_in_full = [0, 14, 1, 16, 2, 17, 4, 21, 6, 23, 10, 27]。
 ```
 
 `__getitem__()` 按照当前实现进行下面的替换：
@@ -681,7 +681,7 @@ scripts/erp_core/{N,O,A}/*.sh
 +        # 先从同一个原始样本取得并归一化完整 28 导联。
 +        x_full = self.data[                    # self.data 的原始形状是 [样本数, 30, 256]。
 +            global_index,                      # 选择当前样本，例如第 100 个全局样本。
-+            self.target_channel_indices,       # 从原始 30 通道取出目标 28 导联。
++            self.full_channel_indices,         # 从原始 30 通道取出完整 28 导联。
 +            :,                                 # 保留当前导联的全部时间采样点。
 +        ].float()                              # 转为 float，得到 [28, 256]。
 +        x_full = self._normalize(x_full)       # 使用训练集 28 导联统计量进行归一化。
@@ -697,10 +697,10 @@ scripts/erp_core/{N,O,A}/*.sh
 -            raise ValueError(f"Unexpected ERP CORE sample shape: {tuple(eeg.shape)}")
 -        if not torch.isfinite(eeg).all():
 +
-+        x_obs = x_full[self.observed_indices_in_target]  # 按 12 导联既定顺序取得 [12, 200]。
++        x_obs = x_full[self.observed_indices_in_full]    # 按 12 导联既定顺序取得 [12, 200]。
 +        x = (                                            # x 是分类 engine 实际读取的第一个字段。
 +            x_full                                      # O：使用完整 28 导联作为分类输入。
-+            if self.channel_names == self.target_channel_names
++            if self.channel_names == self.full_channel_names
 +            else x_obs                                  # N/A/Dynamic Stage 2：使用观测 12 导联。
 +        )
 +
@@ -718,7 +718,7 @@ scripts/erp_core/{N,O,A}/*.sh
 +
 +        label = int(self.labels[index])                       # 下游 12 类分类标签，已经经过 TASK_REMAP。
 +        subject = int(self.subject_values[global_index])      # 原始 subject 编号，供 auxiliary/CSLP 使用。
-+        task = int(self.tasks[global_index])                  # 原始 task 编号；是否重映射需与 cleanup 配置一致。
++        task = label                                         # cleanup 使用重映射后的 12 类 label 作为 task 标签。
 +        return (
 +            x.contiguous(),       # 第 0 项：当前实验主输入，分类 engine 使用 samples 读取。
 +            label,                # 第 1 项：下游标签，分类 engine 使用 targets 读取。
@@ -736,7 +736,7 @@ scripts/erp_core/{N,O,A}/*.sh
 -        [ERPCORE_30_CHANNELS.index(name) for name in channel_names],
 -        dtype=np.int64,
 -    )
-+    target_channel_indices = np.asarray(                           # 目标 28 导联在原始 30 通道中的位置。
++    full_channel_indices = np.asarray(                             # 完整 28 导联在原始 30 通道中的位置。
 +        [ERPCORE_30_CHANNELS.index(name)                            # 例如 FP1→0、FP2→14、O2→27。
 +         for name in ERPCORE_28_CHANNELS],                          # HEOG/VEOG 不在目标列表中，因此不会被选中。
 +        dtype=np.int64,                                             # _training_statistics() 需要整数索引。
@@ -748,18 +748,18 @@ scripts/erp_core/{N,O,A}/*.sh
 +    mean, std = _training_statistics(
 +        payload["data"],          # 原始数据：[样本数, 30, 256]。
 +        indices["train"],          # 只使用训练 subject 的样本，避免验证/测试信息泄漏。
-+        target_channel_indices,    # 只为目标 28 导联分别计算 mean/std。
++        full_channel_indices,      # 只为完整 28 导联分别计算 mean/std。
 +    )
 ```
 
 ```diff
-+def validate_erpcore_sample(sample, observed_indices_in_target):  # 检查统一 tuple 和导联映射。
++def validate_erpcore_sample(sample, observed_indices_in_full):    # 检查统一 tuple 和导联映射。
 +    x, label, x_obs, x_full, subject, task = sample               # 按固定六字段顺序完整解包。
 +    assert x_obs.shape == (12, 200)                               # 观测输入必须是 12 导联、200 点。
 +    assert x_full.shape == (28, 200)                              # 完整目标必须是 28 导联、200 点。
 +    assert torch.equal(                                           # 验证 x_obs 确实来自当前 x_full。
 +        x_obs,
-+        x_full[observed_indices_in_target],                        # 使用例子中的 12 个 target-space 索引。
++        x_full[observed_indices_in_full],                          # 使用例子中的 12 个 full-space 索引。
 +    )
 +    assert torch.isfinite(x_obs).all()                             # 观测输入不能包含 NaN/Inf。
 +    assert torch.isfinite(x_full).all()                            # 完整目标不能包含 NaN/Inf。
@@ -1045,7 +1045,7 @@ subject/task auxiliary
 
 #### 修改位置
 
-- 修改 `modeling_finetune.py`；
+- 修改 `modeling_dynamic_stage1.py` 中的 `NeuralTransformer`；
 - 从现有 `forward_features()` 中抽取 patch embedding 之后的公共逻辑；
 - 原有 `forward()` 和 N/O/A 调用方式保持不变。
 
@@ -1063,7 +1063,7 @@ subject/task auxiliary
 +            self.embed_dim,
 +        )
 +
-+    def forward_from_tokens(
++    def forward_features_from_tokens(
 +        self,
 +        tokens,
 +        token_input_chans_index,
@@ -1089,13 +1089,13 @@ subject/task auxiliary
 +    with torch.no_grad():
 +        old_output = model.forward_features(x, input_chans=input_chans)
 +        tokens = model.patch_tokens(x)
-+        new_output = model.forward_from_tokens(tokens, input_chans)
++        new_output = model.forward_features_from_tokens(tokens, input_chans)
 +    torch.testing.assert_close(old_output, new_output)
 ```
 
 #### 验收条件
 
-- `forward_from_tokens()` 不重复调用 `patch_embed`；
+- `forward_features_from_tokens()` 不重复调用 `patch_embed`；
 - N/O/A 的公开入口和脚本不变；
 - 相同输入和 checkpoint 下，重构前后的 N/O/A 输出一致；
 - position embedding、time embedding 和 pooling 使用正确的 28 导联布局。
@@ -1129,7 +1129,7 @@ subject/task auxiliary
 +            )
 +
 +        h_complete = self.complete_tokens(h_obs, h_pred_miss)
-+        feature = self.backbone.forward_from_tokens(
++        feature = self.backbone.forward_features_from_tokens(
 +            h_complete,
 +            token_input_chans_index=self.target_input_chans_index,
 +            pool_channel_indices=self.pool_channel_indices,

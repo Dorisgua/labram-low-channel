@@ -151,7 +151,7 @@ class Attention(nn.Module):
 
         if rel_pos_bias is not None:
             attn = attn + rel_pos_bias
-        
+
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
@@ -260,12 +260,13 @@ class TemporalConv(nn.Module):
         return x
 
 
-class NeuralTransformer(nn.Module):
+class DynamicNeuralTransformer(nn.Module):
     def __init__(self, EEG_size=1600, patch_size=200, in_chans=1, out_chans=8, num_classes=1000, embed_dim=200, depth=12,
                  num_heads=10, mlp_ratio=4., qkv_bias=False, qk_norm=None, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=nn.LayerNorm, init_values=None,
                  use_abs_pos_emb=True, use_rel_pos_bias=False, use_shared_rel_pos_bias=False,
-                 use_mean_pooling=True, init_scale=0.001, **kwargs):
+                 use_mean_pooling=True, init_scale=0.001, corrector_num_heads=8,
+                 corrector_dropout=0.1, correction_scale=1, **kwargs):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
@@ -361,6 +362,30 @@ class NeuralTransformer(nn.Module):
         self.fc_norm = norm_layer(embed_dim) if use_mean_pooling else None
         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
+        def make_corrector_encoder():
+            layer = nn.TransformerEncoderLayer(
+                d_model=embed_dim,
+                nhead=corrector_num_heads,
+                dim_feedforward=embed_dim * 4,
+                dropout=corrector_dropout,
+                batch_first=True,
+                norm_first=True,
+                activation="gelu",
+            )
+            return nn.TransformerEncoder(layer, num_layers=1)
+
+        # Dynamic Stage 1 直接作为 DynamicNeuralTransformer 的子模块，不再额外
+        # 包装一个 DynamicModel。
+        self.corrector = nn.ModuleDict({
+            "shared_encoder": make_corrector_encoder(),
+            "subject_encoder": make_corrector_encoder(),
+            "task_encoder": make_corrector_encoder(),
+            "shared_norm": nn.LayerNorm(embed_dim),
+            "subject_norm": nn.LayerNorm(embed_dim),
+            "task_norm": nn.LayerNorm(embed_dim),
+        })
+        self.correction_scale = float(correction_scale)
+
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=.02)
         if self.time_embed is not None:
@@ -412,6 +437,92 @@ class NeuralTransformer(nn.Module):
             param.requires_grad = False 
         self.patch_embed.eval()     #让 patch_embed 里面某些层按推理模式运行。
         #是一个保险写法：如果以后 patch_embed 里加了 Dropout 或 BatchNorm，它们也不会在训练时产生随机行为或更新统计量。
+
+    def freeze_corrector(self):
+        for param in self.corrector.parameters():
+            param.requires_grad = False
+        self.corrector.eval()
+
+    def _patch_tokens(self, x):
+        batch_size, channels, num_t, _ = x.shape
+        tokens = self.patch_embed(x)
+        return tokens.reshape(batch_size, channels, num_t, self.embed_dim)
+
+    def _dynamic_channel_indices(self, device):
+        real_positions = [int(value) for value in self.real_input_chans_index[1:]] #只保留导联在 LaBraM position embedding 中的编号
+        target_positions = [int(value) for value in self.target_input_chans_index[1:]]
+        try:
+            obs_indices = [target_positions.index(value) for value in real_positions] #找观测导联在28导联张量中的位置
+        except ValueError as error:
+            raise ValueError("An observed channel is absent from target layout") from error
+        obs_index_set = set(obs_indices)
+        miss_indices = [
+            index for index in range(len(target_positions)) if index not in obs_index_set
+        ]
+        return (
+            torch.as_tensor(obs_indices, dtype=torch.long, device=device), #[1, 3]
+            torch.as_tensor(miss_indices, dtype=torch.long, device=device), #[0, 2, 4]
+        )
+
+    def _encode_dynamic_tokens(self, h_obs):
+        prototypes = self.erpcore28_channel_prototypes.to(dtype=h_obs.dtype)
+        obs_indices, miss_indices = self._dynamic_channel_indices(h_obs.device)
+
+        batch_size, _, num_t, _ = h_obs.shape
+        p_all = prototypes.unsqueeze(0).unsqueeze(2).expand(
+            batch_size, prototypes.shape[0], num_t, self.embed_dim
+        )
+        p_obs = p_all.index_select(1, obs_indices)
+        p_miss = p_all.index_select(1, miss_indices)
+
+        obs_tokens = h_obs.flatten(1, 2)
+        miss_tokens = p_miss.flatten(1, 2)
+
+        num_obs_tokens = obs_tokens.shape[1] #有多少个通道
+        tokens = torch.cat((obs_tokens, miss_tokens), dim=1) # 直接拼接 观测导联 token + 缺失导联 prototype token
+
+        shared_tokens = self.corrector["shared_norm"](
+            self.corrector["shared_encoder"](tokens)
+        )
+        subject_tokens = self.corrector["subject_norm"](
+            self.corrector["subject_encoder"](shared_tokens)
+        )
+        task_tokens = self.corrector["task_norm"](
+            self.corrector["task_encoder"](shared_tokens)
+        )
+
+        subject_missing = subject_tokens[:, num_obs_tokens:, :]
+        task_missing = task_tokens[:, num_obs_tokens:, :]
+        missing_shape = p_miss.shape
+        d_sub = self.correction_scale * torch.tanh(
+            subject_missing.reshape(missing_shape)
+        )
+        d_task = self.correction_scale * torch.tanh(
+            task_missing.reshape(missing_shape)
+        )
+        h_pred_miss = p_miss + d_sub + d_task
+        return {
+            "h_obs": h_obs,
+            "p_all": p_all,
+            "p_miss": p_miss,
+            "obs_indices": obs_indices,
+            "miss_indices": miss_indices,
+            "z_sub": subject_missing.mean(dim=1),
+            "z_task": task_missing.mean(dim=1),
+            "d_sub": d_sub,
+            "d_task": d_task,
+            "h_pred_miss": h_pred_miss,
+        }
+
+    def forward_stage1(self, x_obs, x_full):
+        outputs = self._encode_dynamic_tokens(self._patch_tokens(x_obs))
+        with torch.no_grad():#不希望梯度经过目标分支
+            h_full = self._patch_tokens(x_full)
+            # 只取缺失导联
+            outputs["h_miss_target"] = h_full.index_select(
+                1, outputs["miss_indices"]
+            ).detach()
+        return outputs
 
     def forward_features(self, x, input_chans=None, return_patch_tokens=False, return_all_tokens=False, **kwargs):
         # x: [B, N, A, T]
@@ -561,6 +672,21 @@ class NeuralTransformer(nn.Module):
                 # x_full[:, target_i, :, :]：
                 #   target 空间里对应通道的位置。
                 x_full[:, target_i, :, :] = x_real[:, real_i, :, :]
+
+            # Dynamic ERP CORE 不再让缺失导联一直保持静态 prototype，
+            # 而是直接用当前 DynamicNeuralTransformer 内部的 corrector 预测。
+            if self.completion_scope == "erpcore12_with_erpcore28":
+                dynamic_outputs = self._encode_dynamic_tokens(x_real)
+                expected_obs_indices = torch.as_tensor(
+                    real_channel_indices_in_target_tensor,
+                    dtype=torch.long,
+                    device=x_real.device,
+                )
+                if not torch.equal(dynamic_outputs["obs_indices"], expected_obs_indices):
+                    raise ValueError("Dynamic observed-channel indices are inconsistent")
+                x_full[:, dynamic_outputs["miss_indices"], :, :] = dynamic_outputs[
+                    "h_pred_miss"
+                ]
 
             # 补完后，把 [B, target_channels_num, A, C] 展平成 transformer token：
             # [B, target_channels_num * A, C]
@@ -752,24 +878,24 @@ class NeuralTransformer(nn.Module):
 
 
 @register_model
-def labram_base_patch200_200(pretrained=False, **kwargs):
-    model = NeuralTransformer(
+def labram_dynamic_base_patch200_200(pretrained=False, **kwargs):
+    model = DynamicNeuralTransformer(
         patch_size=200, embed_dim=200, depth=12, num_heads=10, mlp_ratio=4, qk_norm=partial(nn.LayerNorm, eps=1e-6), # qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
 
 @register_model
-def labram_large_patch200_200(pretrained=False, **kwargs):
-    model = NeuralTransformer(
+def labram_dynamic_large_patch200_200(pretrained=False, **kwargs):
+    model = DynamicNeuralTransformer(
         patch_size=200, embed_dim=400, depth=24, num_heads=16, mlp_ratio=4, out_chans=16, qk_norm=partial(nn.LayerNorm, eps=1e-6), # qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
 
 @register_model
-def labram_huge_patch200_200(pretrained=False, **kwargs):
-    model = NeuralTransformer(
+def labram_dynamic_huge_patch200_200(pretrained=False, **kwargs):
+    model = DynamicNeuralTransformer(
         patch_size=200, embed_dim=800, depth=48, num_heads=16, mlp_ratio=4, out_chans=32, qk_norm=partial(nn.LayerNorm, eps=1e-6), # qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()

@@ -17,6 +17,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import json
 import os
+import random
 
 from pathlib import Path
 from collections import OrderedDict
@@ -26,11 +27,18 @@ from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 from timm.utils import ModelEma
 from optim_factory import create_optimizer, get_parameter_groups, LayerDecayValueAssigner
 
-from engine_for_finetuning import train_one_epoch, evaluate
+# 原分类入口：
+# from engine_for_finetuning import train_one_epoch, evaluate
+from engine_for_dynamic_stage1 import (
+    evaluate_dynamic_stage1,
+    train_dynamic_stage1_one_epoch,
+)
 from utils import NativeScalerWithGradNormCount as NativeScaler
 import utils
 from scipy import interpolate
-import modeling_finetune
+# 原模型注册入口：
+# import modeling_finetune
+import modeling_dynamic_stage1
 from modeling_adabrain import AdaBrainLaBraMMLPWrapper, AdaBrainLaBraMWrapper
 from data_processor.bciiv2a import prepare_BCIIV2A_multisession_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
@@ -86,7 +94,8 @@ def get_args():
                         help='robust evaluation dataset')
     
     # Model parameters
-    parser.add_argument('--model', default='labram_base_patch200_200', type=str, metavar='MODEL',
+    # 原分类模型：default='labram_base_patch200_200'
+    parser.add_argument('--model', default='labram_dynamic_base_patch200_200', type=str, metavar='MODEL',
                         help='Name of model to train')
     parser.add_argument('--qkv_bias', action='store_true')
     parser.add_argument('--disable_qkv_bias', action='store_false', dest='qkv_bias')
@@ -213,7 +222,8 @@ def get_args():
                         help='url used to set up distributed training')
 
     parser.add_argument('--enable_deepspeed', action='store_true', default=False)
-    parser.add_argument('--dataset', default='TUAB', type=str,
+    # 原分类默认数据集：default='TUAB'
+    parser.add_argument('--dataset', default='ERPCORE', type=str,
                         help='dataset: TUAB | TUEV | bciiv2a | physionet | SEED | SEEDV | EEGMAT | FACED | AAD | Attention | ERPCORE | Zuo2025 | HGD | Siena | fatig')
     parser.add_argument('--data_path', default='', type=str,
                         help='optional dataset root override')
@@ -225,9 +235,11 @@ def get_args():
     parser.add_argument('--loso_fold', default=0, type=int,
                         help='LOSO fold index for datasets that expose folds, e.g. fatig 0-10')
     
-    parser.add_argument('--channel_subset', default='', type=str,
+    # 原分类默认值：default=''
+    parser.add_argument('--channel_subset', default='erpcore12', type=str,
                         help='channel subset name, for example tuev13/tuev23/physionet23/physionet64/seed23/seed62')
-    parser.add_argument('--completion_scope', default='none', type=str,
+    # 原分类默认值：default='none'
+    parser.add_argument('--completion_scope', default='erpcore12_with_erpcore28', type=str,
                         choices=['none', 'tuev13_with_tuev23', 'bciiv2a13_with_bciiv2a22',
                                  'physionet23_with_physionet64',
                                  'physionet32_with_physionet64',
@@ -244,15 +256,35 @@ def get_args():
                         help='path to channel prototype checkpoint')
     parser.add_argument('--freeze_cnn', action='store_true',
                         help='Freeze patch_embed/TemporalConv and train only transformer/head layers')
+    parser.add_argument('--missing_weight', default=1.0, type=float,
+                        help='weight of missing-channel latent reconstruction loss')
+    parser.add_argument('--reg_weight', default=0.01, type=float,
+                        help='weight of subject/task correction regularization')
+    parser.add_argument('--subject_summary_contra_weight', default=0.0, type=float,
+                        help='weight of z_sub same-subject contrastive loss')
+    parser.add_argument('--task_summary_contra_weight', default=0.0, type=float,
+                        help='weight of z_task same-task contrastive loss')
+    parser.add_argument('--subject_correction_contra_weight', default=0.0, type=float,
+                        help='weight of d_sub same-subject contrastive loss')
+    parser.add_argument('--task_correction_contra_weight', default=0.0, type=float,
+                        help='weight of d_task same-task contrastive loss')
+    parser.add_argument('--permute_sub_weight', default=1.0, type=float,
+                        help='weight of same-subject latent permutation loss')
+    parser.add_argument('--permute_task_weight', default=1.0, type=float,
+                        help='weight of same-task latent permutation loss')
+    parser.add_argument('--correction_scale', default=1.0, type=float,
+                        help='maximum scale applied to d_sub and d_task')
     parser.add_argument('--classifier_mode', default='mean_pool', type=str,
                         choices=['mean_pool', 'adabrain_all_token', 'adabrain_mlp_token'],
                         help='classification head: original LaBraM mean pooling, AdaBrain all-token linear head, or all-token MLP head')
     parser.add_argument('--classifier_token_scope', default='all', type=str,
                         choices=['all', 'real'],
                         help='AdaBrain readout tokens: all backbone channels or only real input channels')
-    parser.add_argument('--best_metric', default='accuracy', type=str,
-                        choices=['accuracy', 'balanced_accuracy', 'f1_weighted', 'cohen_kappa', 'roc_auc', 'pr_auc'],
-                        help='validation metric used to select checkpoint-best; recommended: TUAB=roc_auc, TUEV=cohen_kappa, SEEDV=accuracy')
+    # 原分类训练根据 accuracy 等指标选择 checkpoint-best：
+    # parser.add_argument('--best_metric', default='accuracy', type=str, ...)
+    parser.add_argument('--best_metric', default='loss', type=str,
+                        choices=['loss'],
+                        help='validation reconstruction loss used to select checkpoint-best')
 
     known_args, _ = parser.parse_known_args()
 
@@ -285,6 +317,7 @@ def get_models(args):
         use_abs_pos_emb=args.abs_pos_emb,
         init_values=args.layer_scale_init_value,
         qkv_bias=args.qkv_bias,
+        correction_scale=args.correction_scale,
     )
 
     return model
@@ -666,7 +699,7 @@ def main(args, ds_init):
     seed = args.seed + utils.get_rank()
     torch.manual_seed(seed)
     np.random.seed(seed)
-    # random.seed(seed)
+    random.seed(seed)
 
     cudnn.benchmark = True
 
@@ -674,11 +707,14 @@ def main(args, ds_init):
     # ch_names: list of strings, channel names of the dataset. It should be in capital letters.
     # metrics: list of strings, the metrics you want to use. We utilize PyHealth to implement it.
     dataset_train, dataset_test, dataset_val, ch_names, metrics = get_dataset(args)
-    if args.best_metric not in metrics:
-        raise ValueError(
-            f"best_metric={args.best_metric} is not available for dataset={args.dataset}. "
-            f"Available metrics: {metrics}"
-        )
+    # 原分类检查：
+    # if args.best_metric not in metrics:
+    #     raise ValueError(
+    #         f"best_metric={args.best_metric} is not available for dataset={args.dataset}. "
+    #         f"Available metrics: {metrics}"
+    #     )
+    # Dynamic Stage 1 使用验证集 total loss 选择 checkpoint，越小越好。
+    args.best_metric = "loss"
     print(f"Best metric name: {args.best_metric}")
 
     if args.disable_eval_during_finetuning:
@@ -891,10 +927,12 @@ def main(args, ds_init):
         model.target_input_chans_index = target_input_chans_index
         model.real_input_chans_index = real_input_chans_index
 
-    if args.freeze_cnn:
-        model.freeze_cnn()
-        frozen_cnn_params = sum(p.numel() for p in model.patch_embed.parameters())  #统计 patch_embed 里一共有多少个参数。
-        print(f"Freeze CNN/patch_embed: {frozen_cnn_params} parameters")
+    # 原分类逻辑允许通过参数选择是否冻结：
+    # if args.freeze_cnn:
+    # Dynamic Stage 1 固定冻结 CNN，只训练 forward_stage1() 中的 corrector。
+    model.freeze_cnn()
+    frozen_cnn_params = sum(p.numel() for p in model.patch_embed.parameters())  #统计 patch_embed 里一共有多少个参数。
+    print(f"Freeze CNN/patch_embed: {frozen_cnn_params} parameters")
 
     if args.classifier_mode in {"adabrain_all_token", "adabrain_mlp_token"}:
         token_channels = (
@@ -1025,37 +1063,53 @@ def main(args, ds_init):
         args.weight_decay, args.weight_decay_end, args.epochs, num_training_steps_per_epoch)
     print("Max WD = %.7f, Min WD = %.7f" % (max(wd_schedule_values), min(wd_schedule_values)))
 
-    if args.nb_classes == 1:
-        criterion = torch.nn.BCEWithLogitsLoss()
-    elif args.smoothing > 0.:
-        criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
-    else:
-        criterion = torch.nn.CrossEntropyLoss()
-
-    print("criterion = %s" % str(criterion))
+    # 原分类 criterion；Dynamic Stage 1 的 loss 在专用 engine 中计算。
+    # if args.nb_classes == 1:
+    #     criterion = torch.nn.BCEWithLogitsLoss()
+    # elif args.smoothing > 0.:
+    #     criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    # else:
+    #     criterion = torch.nn.CrossEntropyLoss()
+    # print("criterion = %s" % str(criterion))
 
     utils.auto_load_model(
         args=args, model=model, model_without_ddp=model_without_ddp,
         optimizer=optimizer, loss_scaler=loss_scaler, model_ema=model_ema)
             
     if args.eval:
-        balanced_accuracy = []
-        accuracy = []
+        # 原分类评估：
+        # balanced_accuracy = []
+        # accuracy = []
         eval_loaders = data_loader_test if isinstance(data_loader_test, list) else [data_loader_test]
         for data_loader in eval_loaders:
-            test_stats = evaluate(
-                data_loader, model, device, header='Test:', ch_names=ch_names,
-                metrics=metrics, is_binary=(args.nb_classes == 1),
+            # test_stats = evaluate(
+            #     data_loader, model, device, header='Test:', ch_names=ch_names,
+            #     metrics=metrics, is_binary=(args.nb_classes == 1),
+            #     input_scale=args.input_scale,
+            # )
+            test_stats = evaluate_dynamic_stage1(
+                data_loader, model, device, header='Dynamic Stage 1 Test:',
                 input_scale=args.input_scale,
+                missing_weight=args.missing_weight,
+                reg_weight=args.reg_weight,
+                subject_summary_contra_weight=args.subject_summary_contra_weight,
+                task_summary_contra_weight=args.task_summary_contra_weight,
+                subject_correction_contra_weight=args.subject_correction_contra_weight,
+                task_correction_contra_weight=args.task_correction_contra_weight,
+                permute_sub_weight=args.permute_sub_weight,
+                permute_task_weight=args.permute_task_weight,
             )
-            accuracy.append(test_stats['accuracy'])
-            balanced_accuracy.append(test_stats['balanced_accuracy'])
-        print(f"======Accuracy: {np.mean(accuracy)} {np.std(accuracy)}, balanced accuracy: {np.mean(balanced_accuracy)} {np.std(balanced_accuracy)}")
+            # accuracy.append(test_stats['accuracy'])
+            # balanced_accuracy.append(test_stats['balanced_accuracy'])
+            print(f"Dynamic Stage 1 test stats: {test_stats}")
+        # print(f"======Accuracy: {np.mean(accuracy)} {np.std(accuracy)}, balanced accuracy: {np.mean(balanced_accuracy)} {np.std(balanced_accuracy)}")
         exit(0)
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
-    best_score = float('-inf')
+    # 原分类指标越大越好：best_score = float('-inf')
+    # Dynamic Stage 1 reconstruction loss 越小越好。
+    best_score = float('inf')
     best_epoch = None
     best_val_stats = None
     best_test_stats = None
@@ -1064,14 +1118,31 @@ def main(args, ds_init):
             data_loader_train.sampler.set_epoch(epoch)
         if log_writer is not None:
             log_writer.set_step(epoch * num_training_steps_per_epoch * args.update_freq)
-        train_stats = train_one_epoch(
-            model, criterion, data_loader_train, optimizer,
+        # 原分类训练入口：
+        # train_stats = train_one_epoch(
+        #     model, criterion, data_loader_train, optimizer,
+        #     device, epoch, loss_scaler, args.clip_grad, model_ema,
+        #     log_writer=log_writer, start_steps=epoch * num_training_steps_per_epoch,
+        #     lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
+        #     num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
+        #     ch_names=ch_names, is_binary=args.nb_classes == 1,
+        #     input_scale=args.input_scale,
+        # )
+        train_stats = train_dynamic_stage1_one_epoch(
+            model, data_loader_train, optimizer,
             device, epoch, loss_scaler, args.clip_grad, model_ema,
             log_writer=log_writer, start_steps=epoch * num_training_steps_per_epoch,
             lr_schedule_values=lr_schedule_values, wd_schedule_values=wd_schedule_values,
-            num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq, 
-            ch_names=ch_names, is_binary=args.nb_classes == 1,
+            num_training_steps_per_epoch=num_training_steps_per_epoch, update_freq=args.update_freq,
             input_scale=args.input_scale,
+            missing_weight=args.missing_weight,
+            reg_weight=args.reg_weight,
+            subject_summary_contra_weight=args.subject_summary_contra_weight,
+            task_summary_contra_weight=args.task_summary_contra_weight,
+            subject_correction_contra_weight=args.subject_correction_contra_weight,
+            task_correction_contra_weight=args.task_correction_contra_weight,
+            permute_sub_weight=args.permute_sub_weight,
+            permute_task_weight=args.permute_task_weight,
         )
         
         if args.output_dir and args.save_ckpt:
@@ -1080,18 +1151,45 @@ def main(args, ds_init):
                 loss_scaler=loss_scaler, epoch=epoch, model_ema=model_ema, save_ckpt_freq=args.save_ckpt_freq)
             
         if data_loader_val is not None:
-            val_stats = evaluate(
-                data_loader_val, model, device, header='Val:', ch_names=ch_names,
-                metrics=metrics, is_binary=args.nb_classes == 1,
+            # 原分类评估入口：
+            # val_stats = evaluate(
+            #     data_loader_val, model, device, header='Val:', ch_names=ch_names,
+            #     metrics=metrics, is_binary=args.nb_classes == 1,
+            #     input_scale=args.input_scale,
+            # )
+            val_stats = evaluate_dynamic_stage1(
+                data_loader_val, model, device, header='Dynamic Stage 1 Val:',
                 input_scale=args.input_scale,
+                missing_weight=args.missing_weight,
+                reg_weight=args.reg_weight,
+                subject_summary_contra_weight=args.subject_summary_contra_weight,
+                task_summary_contra_weight=args.task_summary_contra_weight,
+                subject_correction_contra_weight=args.subject_correction_contra_weight,
+                task_correction_contra_weight=args.task_correction_contra_weight,
+                permute_sub_weight=args.permute_sub_weight,
+                permute_task_weight=args.permute_task_weight,
             )
-            print(f"Accuracy of the network on the {len(dataset_val)} val EEG: {val_stats['accuracy']:.2f}%")
-            test_stats = evaluate(
-                data_loader_test, model, device, header='Test:', ch_names=ch_names,
-                metrics=metrics, is_binary=args.nb_classes == 1,
+            # print(f"Accuracy of the network on the {len(dataset_val)} val EEG: {val_stats['accuracy']:.2f}%")
+            print(f"Dynamic Stage 1 val loss on {len(dataset_val)} EEG: {val_stats['loss']:.6f}")
+            # test_stats = evaluate(
+            #     data_loader_test, model, device, header='Test:', ch_names=ch_names,
+            #     metrics=metrics, is_binary=args.nb_classes == 1,
+            #     input_scale=args.input_scale,
+            # )
+            test_stats = evaluate_dynamic_stage1(
+                data_loader_test, model, device, header='Dynamic Stage 1 Test:',
                 input_scale=args.input_scale,
+                missing_weight=args.missing_weight,
+                reg_weight=args.reg_weight,
+                subject_summary_contra_weight=args.subject_summary_contra_weight,
+                task_summary_contra_weight=args.task_summary_contra_weight,
+                subject_correction_contra_weight=args.subject_correction_contra_weight,
+                task_correction_contra_weight=args.task_correction_contra_weight,
+                permute_sub_weight=args.permute_sub_weight,
+                permute_task_weight=args.permute_task_weight,
             )
-            print(f"Accuracy of the network on the {len(dataset_test)} test EEG: {test_stats['accuracy']:.2f}%")
+            # print(f"Accuracy of the network on the {len(dataset_test)} test EEG: {test_stats['accuracy']:.2f}%")
+            print(f"Dynamic Stage 1 test loss on {len(dataset_test)} EEG: {test_stats['loss']:.6f}")
             print(f"Epoch {epoch} best metric name: {args.best_metric}")
             print(f"Epoch {epoch} val metrics: {val_stats}")
             print(f"Epoch {epoch} test metrics: {test_stats}")
@@ -1102,7 +1200,8 @@ def main(args, ds_init):
             )
             
             current_score = float(val_stats[args.best_metric])
-            if current_score > best_score:
+            # 原分类指标越大越好：if current_score > best_score:
+            if current_score < best_score:
                 best_score = current_score
                 best_epoch = epoch
                 best_val_stats = val_stats

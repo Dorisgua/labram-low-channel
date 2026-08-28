@@ -37,6 +37,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     if ch_names is not None:
         input_chans = utils.get_input_chans(ch_names)
     model.train(True)
+    finetune_model = model.module if hasattr(model, "module") else model
+    if hasattr(finetune_model, "patch_embed") and not any(
+        param.requires_grad for param in finetune_model.patch_embed.parameters()
+    ):
+        finetune_model.patch_embed.eval()
+    if hasattr(finetune_model, "corrector") and not any(
+        param.requires_grad for param in finetune_model.corrector.parameters()
+    ):
+        # Stage 2 使用冻结的 Stage 1 embedding 模块。
+        finetune_model.corrector.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -49,7 +59,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     else:
         optimizer.zero_grad()
 
-    for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    # 旧逻辑只能解包二字段 tuple：
+    # for data_iter_step, (samples, targets) in enumerate(
+    #         metric_logger.log_every(data_loader, print_freq, header)):
+    # 分类训练只取前两个字段，其余字段留给 Dynamic Stage 1 使用。
+    for data_iter_step, batch in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+        samples, targets, *_ = batch
         step = data_iter_step // update_freq
         if step >= num_training_steps_per_epoch:
             continue
@@ -170,8 +185,11 @@ def evaluate(data_loader, model, device, header='Test:', ch_names=None, metrics=
     pred = []
     true = []
     for step, batch in enumerate(metric_logger.log_every(data_loader, 10, header)):
-        EEG = batch[0]
-        target = batch[-1]
+        # 旧逻辑：
+        # EEG = batch[0]
+        # target = batch[-1]
+        # 新逻辑不能再使用 batch[-1]，因为 ERP Core 六字段 tuple 的末项是 task。
+        EEG, target, *_ = batch
         EEG = EEG.float().to(device, non_blocking=True) * input_scale
         EEG = rearrange(EEG, 'B N (A T) -> B N A T', T=200)
         target = target.to(device, non_blocking=True)

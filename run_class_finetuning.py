@@ -31,6 +31,7 @@ from utils import NativeScalerWithGradNormCount as NativeScaler
 import utils
 from scipy import interpolate
 import modeling_finetune
+import modeling_dynamic_stage1  # 注册 Dynamic Stage 2 模型；前向仍只接收 batch 的第一个字段 x_obs。
 from modeling_adabrain import AdaBrainLaBraMMLPWrapper, AdaBrainLaBraMWrapper
 from data_processor.bciiv2a import prepare_BCIIV2A_multisession_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
@@ -890,6 +891,9 @@ def main(args, ds_init):
 
         model.target_input_chans_index = target_input_chans_index
         model.real_input_chans_index = real_input_chans_index
+
+    if hasattr(model, "freeze_corrector") and args.completion_scope == "erpcore12_with_erpcore28":
+        model.freeze_corrector()  # Stage 2 冻结 Stage 1 corrector，只微调分类部分。
 
     if args.freeze_cnn:
         model.freeze_cnn()
