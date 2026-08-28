@@ -463,6 +463,20 @@ DATA_PATH="$BCI_DATA_PATH" bash scripts/bciiv2a/A/freeze_cnn.sh
 
 #### 新实验结果
 
+按照val acc选best chekcpoint
+
+| 实验 | Best Val Acc Epoch | Best Val Acc | Test Acc | Test BAcc |
+|---|---:|---:|---:|---:|
+| N freeze CNN | 0 | 59.17% | 58.56% | 32.66% |
+| N full finetune | 2 | 64.52% | 63.85% | 40.87% |
+| A freeze CNN | 2 | 60.51% | 60.35% | 33.87% |
+| D Dynamic Stage 2 | 2 | 60.27% | 59.75% | 34.65% |
+| O freeze CNN | 2 | 64.63% | 62.55% | 41.16% |
+| O full finetune | 2 | **68.59%** | **65.53%** | **46.28%** |
+
+
+按照val bacc选best chekcpoint
+
 | 新实验 | 训练方式 | 最佳 epoch | Val 选择指标 | Test Acc | Test BAcc | Test Kappa | Test F1 |
 |---|---|---:|---:|---:|---:|---:|---:|
 | A | freeze CNN | 1 | BAcc 38.46% | 61.38% | 40.29% | 0.5065 | 56.27% |
