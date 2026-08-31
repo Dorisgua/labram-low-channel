@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 公共 LaBraM 分类执行器。
+# 公共 LaBraM 训练执行器。
 # 数据集 base 负责设置 DATASET/DATA_PATH 等数据集变量；wrapper 负责设置
-# O/N/A、completion、prototype、classifier 和 freeze/full 等实验变量。
+# 训练入口、O/N/A/D、completion、prototype、classifier 和 freeze/full 等实验变量。
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
@@ -25,6 +25,7 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-${GPU_IDS}}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
 TORCHRUN="${TORCHRUN:-${REPO_DIR}/../../micromamba-root/envs/labram/bin/torchrun}"
+TRAIN_ENTRYPOINT="${TRAIN_ENTRYPOINT:-run_class_finetuning.py}"
 MODEL="${MODEL:-labram_base_patch200_200}"
 FINETUNE="${FINETUNE:-${REPO_DIR}/checkpoints/labram-base.pth}"
 
@@ -47,6 +48,7 @@ POOLING_SCOPE="${POOLING_SCOPE:-low}"
 CLASSIFIER_MODE="${CLASSIFIER_MODE:-adabrain_all_token}"
 CLASSIFIER_TOKEN_SCOPE="${CLASSIFIER_TOKEN_SCOPE:-real}"
 CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-}"
+CORRECTION_SCALE="${CORRECTION_SCALE:-1.0}"
 BEST_METRIC="${BEST_METRIC:-accuracy}"
 FREEZE_CNN="${FREEZE_CNN:-1}"
 RUN_FOREGROUND="${RUN_FOREGROUND:-0}"
@@ -61,14 +63,30 @@ RUN_PREFIX="${RUN_PREFIX_OVERRIDE:-${OUTPUT_SCRIPT_NAME}}"
 RUN_ID="$(date +%Y%m%d_%H%M%S)"
 RUN_TAG="${RUN_TAG:-seed${SEED}}"
 RUN_NAME="${RUN_PREFIX}${RUN_TAG:+_${RUN_TAG}}_${RUN_ID}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/${DATASET,,}/${OUTPUT_SCRIPT_NAME}}"
-OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
-TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
-TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"
+if [[ -n "${OUTPUT_DIR:-}" ]]; then
+    # Dynamic Stage 1 keeps checkpoint-best.pth at a stable handoff path.
+    OUTPUT_DIR="${OUTPUT_DIR%/}/"
+    OUTPUT_ROOT="${OUTPUT_ROOT:-${OUTPUT_DIR%/}}"
+    TB_LOG_DIR="${TB_LOG_DIR:-${OUTPUT_DIR}tensorboard/}"
+    TERMINAL_LOG_DIR="${TERMINAL_LOG_DIR:-${OUTPUT_DIR}run_logs}"
+else
+    OUTPUT_ROOT="${OUTPUT_ROOT:-./outputs/${DATASET,,}/${OUTPUT_SCRIPT_NAME}}"
+    OUTPUT_DIR="${OUTPUT_ROOT}/checkpoints/${RUN_NAME}/"
+    TB_LOG_DIR="${OUTPUT_ROOT}/tensorboard/${RUN_NAME}/"
+    TERMINAL_LOG_DIR="${OUTPUT_ROOT}/run_logs"
+fi
 TERMINAL_LOG="${TERMINAL_LOG_DIR}/${RUN_NAME}.log"
 
 if [[ ! -x "${TORCHRUN}" ]]; then
     echo "Missing torchrun executable: ${TORCHRUN}" >&2
+    exit 1
+fi
+if [[ ! -f "${TRAIN_ENTRYPOINT}" ]]; then
+    echo "Missing training entrypoint: ${TRAIN_ENTRYPOINT}" >&2
+    exit 1
+fi
+if [[ ! -f "${DATA_PATH}" && ! -d "${DATA_PATH}" ]]; then
+    echo "Missing dataset path: ${DATA_PATH}" >&2
     exit 1
 fi
 if [[ ! -f "${FINETUNE}" ]]; then
@@ -85,7 +103,7 @@ CMD=(
     --nnodes=1
     --nproc_per_node="${NPROC_PER_NODE}"
     --master_port="${MASTER_PORT}"
-    run_class_finetuning.py
+    "${TRAIN_ENTRYPOINT}"
     --output_dir "${OUTPUT_DIR}"
     --log_dir "${TB_LOG_DIR}"
     --model "${MODEL}"
@@ -99,6 +117,7 @@ CMD=(
     --pooling_scope "${POOLING_SCOPE}"
     --classifier_mode "${CLASSIFIER_MODE}"
     --classifier_token_scope "${CLASSIFIER_TOKEN_SCOPE}"
+    --correction_scale "${CORRECTION_SCALE}"
     --best_metric "${BEST_METRIC}"
     --batch_size "${BATCH_SIZE}"
     --update_freq "${UPDATE_FREQ}"

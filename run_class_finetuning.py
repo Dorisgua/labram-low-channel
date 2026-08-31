@@ -243,6 +243,8 @@ def get_args():
                         help='pool only real input channels or all completed target channels')
     parser.add_argument('--channel_prototype_path', default='', type=str,
                         help='path to channel prototype checkpoint')
+    parser.add_argument('--correction_scale', default=1.0, type=float,
+                        help='maximum scale applied to dynamic subject/task corrections')
     parser.add_argument('--freeze_cnn', action='store_true',
                         help='Freeze patch_embed/TemporalConv and train only transformer/head layers')
     parser.add_argument('--classifier_mode', default='mean_pool', type=str,
@@ -286,6 +288,7 @@ def get_models(args):
         use_abs_pos_emb=args.abs_pos_emb,
         init_values=args.layer_scale_init_value,
         qkv_bias=args.qkv_bias,
+        correction_scale=args.correction_scale,
     )
 
     return model
