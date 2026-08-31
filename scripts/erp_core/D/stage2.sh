@@ -27,7 +27,7 @@ export BATCH_SIZE="${BATCH_SIZE:-64}"
 export EPOCHS="${EPOCHS:-30}"
 export WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
 export SEED="${SEED:-1}"
-export MASTER_PORT="${MASTER_PORT:-29561}"
+export MASTER_PORT="${MASTER_PORT:-29562}"
 
 # 兼容旧 D 脚本的 RUN_BACKGROUND；新接口与 A/N/O 一致，使用 RUN_FOREGROUND。
 if [[ -n "${RUN_BACKGROUND+x}" && -z "${RUN_FOREGROUND+x}" ]]; then
