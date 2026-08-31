@@ -7,3 +7,9 @@
 | `develop/aon-v1` | 端到端：o全导联、n少导联、a用prototype静态补 |
 | `develop/stage1stage2` | erpcore 模仿 cslp |
 | `upstream-labram` | 原始labram |
+
+
+## 查看动态dynamic改了哪里
+'''
+git diff low-channel/develop/aon-v1 low-channel/develop/aond-v2
+'''
