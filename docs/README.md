@@ -94,7 +94,7 @@ LR 不同，因此分成两行。
 
 ## 5. 整体结论
 
-### 5.1 各数据集核心目标达成情况（当前新实验seed = 0）
+### 5.1 各数据集核心目标达成情况（当前新实验；A/N/O seed = 0）
 
 判定规则：
 
@@ -104,21 +104,27 @@ LR 不同，因此分成两行。
 - `—`：尚未完成对应实验，无法判断。
 - 单元格内的数值均按 `Test Acc；Test BAcc` 顺序列出；`O/A/N` 或 `A/N` 表示对应实验的数值顺序。
 
-| 数据集 | `O > A > N`（均 freeze CNN） | `A > N`（两者均 freeze CNN） | `A > N`（A freeze、N finetune CNN） | `D > A` |
-|---|---|---|---|---|
-| BCI-IV-2a (multi session) | ✅<br>Acc O/A/N：55.48% > 54.71% > 52.70%<br>BAcc O/A/N：55.48% > 54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.70%<br>BAcc A/N：54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.39%<br>BAcc A/N：54.71% > 52.39% | —<br>尚未进行 D 实验 |
-| ERP-Core | ✅<br>Acc O/A/N：62.55% > 60.35% > 58.56%<br>BAcc O/A/N：41.16% > 33.87% > 32.66% | ✅<br>Acc A/N：60.35% > 58.56%<br>BAcc A/N：33.87% > 32.66% | ❌<br>Acc A/N：60.35% < 63.85%<br>BAcc A/N：33.87% < 40.87% | △<br>Acc D/A：59.75% < 60.35%<br>BAcc D/A：34.65% > 33.87% |
-| TUEV | ❌<br>Acc O/A/N：71.64% / 71.58% / 74.19%<br>BAcc O/A/N：53.27% / 54.37% / 61.67% | ❌<br>Acc A/N：71.58% < 74.19%<br>BAcc A/N：54.37% < 61.67% | ❌<br>Acc A/N：71.58% < 74.63%<br>BAcc A/N：54.37% < 60.47% | —<br>尚未进行 D 实验 |
-| PhysioNet-32 | ✅<br>Acc O/A/N：62.86% > 54.36% > 53.62%<br>BAcc O/A/N：62.88% > 54.37% > 53.65% | ✅<br>Acc A/N：54.36% > 53.62%<br>BAcc A/N：54.37% > 53.65% | ❌<br>Acc A/N：54.36% < 55.31%<br>BAcc A/N：54.37% < 55.33% | —<br>尚未进行 D 实验 |
-| SEED | ✅<br>Acc O/A/N：56.16% > 55.08% > 54.32%<br>BAcc O/A/N：55.84% > 54.60% > 53.90% | ✅<br>Acc A/N：55.08% > 54.32%<br>BAcc A/N：54.60% > 53.90% | ❌<br>Acc A/N：55.08% < 55.34%<br>BAcc A/N：54.60% < 54.84% | —<br>尚未进行 D 实验 |
-| SEED-V | △<br>Acc O/A/N：42.25% / 38.86% / 38.93%<br>BAcc O/A/N：42.04% > 38.22% > 38.10% | △<br>Acc A/N：38.86% < 38.93%<br>BAcc A/N：38.22% > 38.10% | ❌<br>Acc A/N：38.86% < 39.05%<br>BAcc A/N：38.22% < 38.38% | —<br>尚未进行 D 实验 |
-| EEGMAT | ❌<br>Acc O/A/N：83.33% / 74.17% / 75.00%<br>BAcc O/A/N：83.33% / 74.17% / 75.00% | ❌<br>Acc A/N：74.17% < 75.00%<br>BAcc A/N：74.17% < 75.00% | ✅<br>Acc A/N：74.17% > 73.33%<br>BAcc A/N：74.17% > 73.33% | —<br>尚未进行 D 实验 |
-| HGD | ✅<br>Acc O/A/N：81.86% > 80.03% > 78.37%<br>BAcc O/A/N：81.86% > 80.02% > 78.37% | ✅<br>Acc A/N：80.03% > 78.37%<br>BAcc A/N：80.02% > 78.37% | ❌<br>Acc A/N：80.03% < 83.33%<br>BAcc A/N：80.02% < 83.33% | —<br>尚未进行 D 实验 |
-| Siena | △<br>Acc O/A/N：97.93% > 97.55% > 97.42%<br>BAcc O/A/N：57.59% / 49.93% / 53.31% | △<br>Acc A/N：97.55% > 97.42%<br>BAcc A/N：49.93% < 53.31% | △<br>Acc A/N：97.55% > 97.36%<br>BAcc A/N：49.93% < 58.45% | —<br>尚未进行 D 实验 |
-| Attention | ❌<br>Acc O/A/N：84.63% / 84.07% / 85.00%<br>BAcc O/A/N：66.78% / 73.11% / 69.22% | △<br>Acc A/N：84.07% < 85.00%<br>BAcc A/N：73.11% > 69.22% | ❌<br>Acc A/N：84.07% < 85.19%<br>BAcc A/N：73.11% < 77.78% | —<br>尚未进行 D 实验 |
-| AAD | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 D 实验 |
-| FACED | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 D 实验 |
-| Zuo2025 | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 D 实验 |
+| 数据集 | `O > A > N`（均 freeze CNN） | `A > N`（两者均 freeze CNN） | `A > N`（A freeze、N finetune CNN） | `D > A` | 参考论文与文章效果 |
+|---|---|---|---|---|---|
+| BCI-IV-2a (multi session) | ✅<br>Acc O/A/N：55.48% > 54.71% > 52.70%<br>BAcc O/A/N：55.48% > 54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.70%<br>BAcc A/N：54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.39%<br>BAcc A/N：54.71% > 52.39% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：60.75% |
+| ERP-Core | △<br>Acc O/A/N：57.60% / 61.38% / 60.59%<br>BAcc O/A/N：44.36% > 40.29% > 39.73% | ✅<br>Acc A/N：61.38% > 60.59%<br>BAcc A/N：40.29% > 39.73% | ❌<br>Acc A/N：61.38% < 64.42%<br>BAcc A/N：40.29% < 45.42% | ❌<br>Acc D/A：54.66% < 61.38%<br>BAcc D/A：39.61% < 40.29% | CSLP<br>Test Acc：48.48±0.34%  |
+| TUEV | ❌<br>Acc O/A/N：71.64% / 71.58% / 74.19%<br>BAcc O/A/N：53.27% / 54.37% / 61.67% | ❌<br>Acc A/N：71.58% < 74.19%<br>BAcc A/N：54.37% < 61.67% | ❌<br>Acc A/N：71.58% < 74.63%<br>BAcc A/N：54.37% < 60.47% | —<br>尚未进行 D 实验 | LaBraM<br>Test BAcc：64.09 ± 0.65 |
+| PhysioNet-32 | ✅<br>Acc O/A/N：62.86% > 54.36% > 53.62%<br>BAcc O/A/N：62.88% > 54.37% > 53.65% | ✅<br>Acc A/N：54.36% > 53.62%<br>BAcc A/N：54.37% > 53.65% | ❌<br>Acc A/N：54.36% < 55.31%<br>BAcc A/N：54.37% < 55.33% | —<br>尚未进行 D 实验 | EEG-FM-Bench（修正）<br>Test BAcc：57.52 ± 0.27 |
+| SEED | ✅<br>Acc O/A/N：56.16% > 55.08% > 54.32%<br>BAcc O/A/N：55.84% > 54.60% > 53.90% | ✅<br>Acc A/N：55.08% > 54.32%<br>BAcc A/N：54.60% > 53.90% | ❌<br>Acc A/N：55.08% < 55.34%<br>BAcc A/N：54.60% < 54.84% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：55.78 |
+| SEED-V | △<br>Acc O/A/N：42.25% / 38.86% / 38.93%<br>BAcc O/A/N：42.04% > 38.22% > 38.10% | △<br>Acc A/N：38.86% < 38.93%<br>BAcc A/N：38.22% > 38.10% | ❌<br>Acc A/N：38.86% < 39.05%<br>BAcc A/N：38.22% < 38.38% | —<br>尚未进行 D 实验 | LaBraM、EEG-FM-Bench<br>Test Acc：40.95 ± 0.62 |
+| EEGMAT | ❌<br>Acc O/A/N：83.33% / 74.17% / 75.00%<br>BAcc O/A/N：83.33% / 74.17% / 75.00% | ❌<br>Acc A/N：74.17% < 75.00%<br>BAcc A/N：74.17% < 75.00% | ✅<br>Acc A/N：74.17% > 73.33%<br>BAcc A/N：74.17% > 73.33% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：85.83 |
+| HGD | ✅<br>Acc O/A/N：81.86% > 80.03% > 78.37%<br>BAcc O/A/N：81.86% > 80.02% > 78.37% | ✅<br>Acc A/N：80.03% > 78.37%<br>BAcc A/N：80.02% > 78.37% | ❌<br>Acc A/N：80.03% < 83.33%<br>BAcc A/N：80.02% < 83.33% | —<br>尚未进行 D 实验 | Schirrmeister et al.<br>Test Acc：91.2 |
+| Siena | △<br>Acc O/A/N：97.93% > 97.55% > 97.42%<br>BAcc O/A/N：57.59% / 49.93% / 53.31% | △<br>Acc A/N：97.55% > 97.42%<br>BAcc A/N：49.93% < 53.31% | △<br>Acc A/N：97.55% > 97.36%<br>BAcc A/N：49.93% < 58.45% | —<br>尚未进行 D 实验 | —<br>未提供对应文章结果 |
+| Attention | ❌<br>Acc O/A/N：84.63% / 84.07% / 85.00%<br>BAcc O/A/N：66.78% / 73.11% / 69.22% | △<br>Acc A/N：84.07% < 85.00%<br>BAcc A/N：73.11% > 69.22% | ❌<br>Acc A/N：84.07% < 85.19%<br>BAcc A/N：73.11% < 77.78% | —<br>尚未进行 D 实验 | BrainPro<br>Test BAcc：72.22 ± 2.91 |
+| AAD | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 D 实验 | —<br>未提供对应文章结果 |
+| FACED | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 D 实验 | CBraMod<br>Test BAcc：52.73 ± 1.07 |
+| Zuo2025 | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 D 实验 | —<br>未提供对应文章结果 |
+
+ERP-Core 的 A/N/O 数值来自 `LaBraM-unified-AON/outputs/erpcore`：均为 seed 0，并按
+Val BAcc 选择 best checkpoint。D 数值来自当前 dynamic 仓库最新完成的
+`erp_core_D_stage2_seed1_20260831_032343`，同样按 Val BAcc 选择 best checkpoint。
+由于 A 与 D 的 seed 不一致，当前 `D > A` 只能作为已有结果对照；严格结论需要补跑
+D seed 0，或补跑 A seed 1 后进行 matching-seed 比较。
 
 
 
