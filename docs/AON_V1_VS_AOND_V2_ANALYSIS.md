@@ -1,5 +1,15 @@
 # 缺失通道预测与 Stage 1 训练流程
 
+
+**修改入口：**
+
+- **只调训练参数或已有 loss 权重**：先改 `scripts/erp_core/D/stage1.sh`，例如学习率、训练轮数、`MISSING_WEIGHT`，不必先改 Python。
+- **改“缺失通道怎么预测”**：改 `modeling_dynamic_stage1.py` 的 `_encode_dynamic_tokens()`；如果要换 corrector 的层数或网络类型，还要改同文件中的 corrector 初始化。
+- **改“预测什么、拿什么作标准”**：改 `modeling_dynamic_stage1.py` 的 `forward_stage1()`；**改“损失怎么算”**，则改 `losses_dynamic.py` 中对应的损失函数及 `compute_stage1_losses()`。
+- **改“哪些样本配成一对”**：改 `data_processor/erpcore.py` 的 `sample_cslpae_pair_batch()`，例如要求同被试但不同任务，或同任务但不同被试。
+- **改训练执行流程**：看 `engine_for_dynamic_stage1.py` 的 `train_dynamic_stage1_batch()`；**改冻结范围、优化器或 best checkpoint 标准**，看 `run_dynamic_stage1.py`。
+
+
 | 模块 | 步骤 | 输入或来源 | 当前处理逻辑 | 输出／目的／当前权重 | 修改位置 |
 |---|---|---|---|---|---|
 | **缺失通道预测** | **1. 提取观测特征** | `x_obs`：`[B,12,1,200]` | 12 通道 EEG 经过冻结的 CNN／patch encoder：`h_obs = self._patch_tokens(x_obs)` | 观测特征 `h_obs`：`[B,12,1,200]` | `modeling_dynamic_stage1.py` → `_patch_tokens()` |
@@ -26,11 +36,3 @@
 | Stage 1 训练目标 | **13. 前向与反向传播** | 主 batch、subject pair、task pair | 主 batch 前向 1 次；subject-left／right 2 次；task-left／right 2 次；合并损失后反向传播 | 当前常规流程为 **5 次 forward、1 次 backward、1 次 optimizer step**；需结合梯度累积等实际设置确认 | `engine_for_dynamic_stage1.py` → `train_dynamic_stage1_batch()` |
 | Stage 1 训练目标 | **14. 参数更新范围** | `total_loss` | CNN 冻结；target 不反向传播；prototype 为 buffer；LaBraM 主 Transformer blocks 不在 Stage 1 前向路径中 | **主要更新 corrector**：shared、subject、task encoder 及对应 LayerNorm | `run_dynamic_stage1.py` 的冻结／优化器逻辑；`modeling_dynamic_stage1.py` 的 `corrector` |
 | Stage 1 训练目标 | **15. 选择 best checkpoint** | Validation 加权总损失 | 每个 epoch 验证，保存 validation total loss 更低的模型 | **`checkpoint-best.pth` 对应验证集加权总损失最低**，不是分类准确率最高，也不等同于单独重建损失最低 | `run_dynamic_stage1.py` 的 best checkpoint 选择逻辑 |
-
-**读表说明：**
-
-- `B` 为 batch size；上表对应每通道 **1 个时间 patch、200 维特征**的当前配置。
-- 补全对象是 **token 特征，不是原始 EEG 波形**。
-- 步骤用于解释数据依赖，不代表所有操作都严格串行；例如通道索引服务于 prototype 划分，target 与预测属于两条路径。
-- InfoNCE 的负样本组成及标签处理需要核对实现，不能仅凭“同 subject／task 配对”就断定所有负样本来自不同 subject／task。
-- 当前实现与权重依据提供材料整理，正式交付前应与指定代码版本核对。
