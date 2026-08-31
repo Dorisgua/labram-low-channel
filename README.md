@@ -9,7 +9,14 @@
 | `upstream-labram` | 原始labram |
 
 
-## 查看动态dynamic改了哪里
-'''
+## DIff 
+
+查看动态dynamic改了哪里
+```bash
 git diff low-channel/develop/aon-v1 low-channel/develop/aond-v2
-'''
+```
+
+看改了哪些文件
+```
+git diff --stat low-channel/develop/aon-v1 low-channel/develop/aond-v2
+```
