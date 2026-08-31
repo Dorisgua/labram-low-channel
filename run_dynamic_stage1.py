@@ -39,7 +39,6 @@ from scipy import interpolate
 # 原模型注册入口：
 # import modeling_finetune
 import modeling_dynamic_stage1
-from modeling_adabrain import AdaBrainLaBraMMLPWrapper, AdaBrainLaBraMWrapper
 from data_processor.bciiv2a import prepare_BCIIV2A_multisession_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
 from data_processor.physionet import prepare_PhysioNet_motor_imagery_dataset
@@ -934,60 +933,10 @@ def main(args, ds_init):
     frozen_cnn_params = sum(p.numel() for p in model.patch_embed.parameters())  #统计 patch_embed 里一共有多少个参数。
     print(f"Freeze CNN/patch_embed: {frozen_cnn_params} parameters")
 
-    if args.classifier_mode in {"adabrain_all_token", "adabrain_mlp_token"}:
-        token_channels = (
-            len(target_ch_names)
-            if args.completion_scope != "none"
-            else len(ch_names)
-        )
-        readout_channel_indices = None
-        if args.classifier_token_scope == "real":
-            if args.completion_scope == "none":
-                readout_channel_indices = list(range(len(ch_names)))
-            else:
-                real_channel_pos = list(real_input_chans_index[1:])
-                target_channel_pos = list(target_input_chans_index[1:])
-                missing_real_positions = [
-                    pos for pos in real_channel_pos if pos not in target_channel_pos
-                ]
-                if missing_real_positions:
-                    raise ValueError(
-                        "Real input channels are absent from the completed target "
-                        f"channel space: {missing_real_positions}"
-                    )
-                readout_channel_indices = [
-                    target_channel_pos.index(pos) for pos in real_channel_pos
-                ]
-
-        wrapper_cls = (
-            AdaBrainLaBraMMLPWrapper
-            if args.classifier_mode == "adabrain_mlp_token"
-            else AdaBrainLaBraMWrapper
-        )
-        wrapper_kwargs = {}
-        if args.classifier_mode == "adabrain_mlp_token":
-            wrapper_kwargs["dropout"] = args.drop
-
-        model = wrapper_cls(
-            backbone=model,
-            num_channels=token_channels,
-            input_num_channels=len(ch_names),
-            num_t=args.num_t,
-            num_classes=args.nb_classes,
-            readout_channel_indices=readout_channel_indices,
-            **wrapper_kwargs,
-        )
-        print(
-            f"Using {args.classifier_mode} classifier: "
-            f"input_channels={model.input_num_channels}, "
-            f"backbone_channels={token_channels}, num_t={args.num_t}, "
-            f"backbone_tokens={model.expected_tokens}, "
-            f"token_scope={args.classifier_token_scope}, "
-            f"readout_channel_indices={model.readout_channel_indices.tolist()}, "
-            f"readout_channels={model.readout_num_channels}, "
-            f"readout_tokens={model.expected_readout_tokens}, "
-            f"head={model.task_head}"
-        )
+    # Stage 1 only trains the dynamic corrector through forward_stage1().
+    # Keep the raw backbone here so its patch_embed/forward_stage1 interface and
+    # checkpoint keys can be consumed directly by Stage 2.
+    print("Dynamic Stage 1 keeps the raw backbone; classifier head is not used")
 
     model.to(device)
 
