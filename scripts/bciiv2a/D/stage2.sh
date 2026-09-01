@@ -28,7 +28,7 @@ export BATCH_SIZE="${BATCH_SIZE:-64}"
 export EPOCHS="${EPOCHS:-50}"
 export WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
 export SEED="${SEED:-0}"
-export MASTER_PORT="${MASTER_PORT:-29562}"
+export MASTER_PORT="${MASTER_PORT:-29563}"
 
 if [[ -n "${RUN_BACKGROUND+x}" && -z "${RUN_FOREGROUND+x}" ]]; then
     case "${RUN_BACKGROUND}" in

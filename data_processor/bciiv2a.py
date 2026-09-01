@@ -3,6 +3,7 @@
 import json
 import pickle
 from collections import Counter, defaultdict
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -135,6 +136,7 @@ class BCIIV2AMultiSessionLoader(Dataset):
             return X / (scale + 1e-8)
         raise ValueError(f"Unsupported BCI-IV-2a normalization: {self.normalize_method}")
 
+    @lru_cache(maxsize=None)
     def __getitem__(self, index):
         record = self.files[index]
         file_path = record["file"]
