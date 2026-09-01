@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import random
 from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from torch.utils.data import Dataset, default_collate
+from torch.utils.data import Dataset
 
 """from Channels_definition import ERPCORE_30_CHANNELS"""
 
@@ -218,40 +217,6 @@ class ERPCOREPtLoader(Dataset):
             subject,  # [B]
             task,     # [B]
         )"""
-
-    def sample_cslpae_pair_batch(self, property_name, batch_size):
-        """按完整 split 的 subject/task 索引随机构造 CSLP-AE 样本对。"""
-        if property_name == "subject":
-            index_by_value = self.subject_indices
-        elif property_name == "task":
-            index_by_value = self.task_indices
-        else:
-            raise ValueError(f"Unsupported pair property: {property_name}")
-
-        values = sorted(index_by_value)
-        if not values:
-            raise ValueError(f"No values available for property: {property_name}")
-
-        samples_per_repeat = len(values)
-        repeats = max(int(batch_size) // (2 * samples_per_repeat), 1)
-        left_indices = []
-        right_indices = []
-        for _ in range(repeats):
-            for value in values:
-                candidates = index_by_value[value]
-                if len(candidates) >= 2:
-                    left, right = random.sample(candidates, 2)
-                else:
-                    left = right = candidates[0]
-                left_indices.append(left)
-                right_indices.append(right)
-
-        return (
-            default_collate([self[index] for index in left_indices]),
-            default_collate([self[index] for index in right_indices]),
-            repeats,
-            samples_per_repeat,
-        )
 
 
 def prepare_ERPCORE_pt_dataset(

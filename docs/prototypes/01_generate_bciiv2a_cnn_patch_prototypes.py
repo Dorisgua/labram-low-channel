@@ -137,7 +137,8 @@ def main():
     )
 
     num_patches = None
-    for step, (samples, _) in enumerate(data_loader):
+    for step, batch in enumerate(data_loader):
+        samples = batch[0]
         if samples.shape[1] != len(ch_names):
             raise ValueError(
                 f"Expected {len(ch_names)} channels, got {samples.shape[1]}"

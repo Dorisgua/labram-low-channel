@@ -895,7 +895,11 @@ def main(args, ds_init):
         model.target_input_chans_index = target_input_chans_index
         model.real_input_chans_index = real_input_chans_index
 
-    if hasattr(model, "freeze_corrector") and args.completion_scope == "erpcore12_with_erpcore28":
+    dynamic_stage2_scopes = {
+        "bciiv2a13_with_bciiv2a22",
+        "erpcore12_with_erpcore28",
+    }
+    if hasattr(model, "freeze_corrector") and args.completion_scope in dynamic_stage2_scopes:
         model.freeze_corrector()  # Stage 2 冻结 Stage 1 corrector，只微调分类部分。
 
     if args.freeze_cnn:

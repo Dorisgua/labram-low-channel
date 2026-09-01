@@ -10,8 +10,8 @@
     - `freeze_cnn.sh`：冻结 CNN/patch embedding，训练 Transformer 和分类头。
     - `full_finetune.sh`：CNN、Transformer 和分类头一起微调。
 - `D`：使用少导联，并通过 prototype 动态补全到目标导联。
-    - stage1
-    - stage2
+    - `stage1.sh`：冻结 CNN，根据完整导联特征训练 dynamic corrector。
+    - `stage2.sh`：加载并冻结 Stage 1 corrector，训练 Transformer 和分类头。
     - [详细说明：缺失通道预测与 Stage 1 训练流程](AON_V1_VS_AOND_V2_ANALYSIS.md)
 
 ## 3. 运行单个实验
@@ -106,7 +106,7 @@ LR 不同，因此分成两行。
 
 | 数据集 | `O > A > N`（均 freeze CNN） | `A > N`（两者均 freeze CNN） | `A > N`（A freeze、N finetune CNN） | O（full finetune）效果 | `D > A` | 参考论文与文章效果 |
 |---|---|---|---|---|---|---|
-| BCI-IV-2a (multi session) | ✅<br>Acc O/A/N：55.48% > 54.71% > 52.70%<br>BAcc O/A/N：55.48% > 54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.70%<br>BAcc A/N：54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.39%<br>BAcc A/N：54.71% > 52.39% | Test Acc：58.87%<br>Test BAcc：58.87% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：60.75% |
+| BCI-IV-2a (multi session) | ✅<br>Acc O/A/N：55.48% > 54.71% > 52.70%<br>BAcc O/A/N：55.48% > 54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.70%<br>BAcc A/N：54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.39%<br>BAcc A/N：54.71% > 52.39% | Test Acc：58.87%<br>Test BAcc：58.87% | —<br>D 脚本已加入，尚未完成实验 | AdaBrain<br>Test BAcc：60.75% |
 | ERP-Core | △<br>Acc O/A/N：57.60% / 61.38% / 60.59%<br>BAcc O/A/N：44.36% > 40.29% > 39.73% | ✅<br>Acc A/N：61.38% > 60.59%<br>BAcc A/N：40.29% > 39.73% | ❌<br>Acc A/N：61.38% < 64.42%<br>BAcc A/N：40.29% < 45.42% | Test Acc：64.61%<br>Test BAcc：48.91% | ❌<br>Acc D/A：54.66% < 61.38%<br>BAcc D/A：39.61% < 40.29% | CSLP<br>Test Acc：48.48±0.34%  |
 | TUEV | ❌<br>Acc O/A/N：71.64% / 71.58% / 74.19%<br>BAcc O/A/N：53.27% / 54.37% / 61.67% | ❌<br>Acc A/N：71.58% < 74.19%<br>BAcc A/N：54.37% < 61.67% | ❌<br>Acc A/N：71.58% < 74.63%<br>BAcc A/N：54.37% < 60.47% | Test Acc：74.19%<br>Test BAcc：61.92% | —<br>尚未进行 D 实验 | LaBraM<br>Test BAcc：64.09 ± 0.65 |
 | PhysioNet-32 | ✅<br>Acc O/A/N：62.86% > 54.36% > 53.62%<br>BAcc O/A/N：62.88% > 54.37% > 53.65% | ✅<br>Acc A/N：54.36% > 53.62%<br>BAcc A/N：54.37% > 53.65% | ❌<br>Acc A/N：54.36% < 55.31%<br>BAcc A/N：54.37% < 55.33% | Test Acc：63.07%<br>Test BAcc：63.09% | —<br>尚未进行 D 实验 | EEG-FM-Bench（修正）<br>Test BAcc：57.52 ± 0.27 |
@@ -261,7 +261,20 @@ DATA_PATH="$BCI_DATA_PATH" bash scripts/bciiv2a/O/full_finetune.sh
 DATA_PATH="$BCI_DATA_PATH" bash scripts/bciiv2a/N/freeze_cnn.sh
 DATA_PATH="$BCI_DATA_PATH" bash scripts/bciiv2a/N/full_finetune.sh
 DATA_PATH="$BCI_DATA_PATH" bash scripts/bciiv2a/A/freeze_cnn.sh
+
+# D Stage 1：训练 13 → 22 通道的 dynamic corrector
+DATA_PATH="$BCI_DATA_PATH" RUN_FOREGROUND=1 bash scripts/bciiv2a/D/stage1.sh
+
+# D Stage 2：默认读取 outputs/bciiv2a/bciiv2a_D_stage1/checkpoint-best.pth
+DATA_PATH="$BCI_DATA_PATH" RUN_FOREGROUND=1 bash scripts/bciiv2a/D/stage2.sh
 ```
+
+BCI-IV-2a 的 D 使用与 A 相同的 13 个真实通道和 22 通道目标空间。Stage 1
+按 validation loss 保存稳定交接文件
+`outputs/bciiv2a/bciiv2a_D_stage1/checkpoint-best.pth`；Stage 2 加载并冻结其中的
+CNN 与 dynamic corrector，再训练 Transformer 和分类头。若 Stage 1 使用了自定义
+`OUTPUT_DIR`，运行 Stage 2 时应显式传入
+`STAGE1_CHECKPOINT=/实际路径/checkpoint-best.pth`。
 
 ### 12.2 ERP-Core
 

@@ -38,15 +38,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         input_chans = utils.get_input_chans(ch_names)
     model.train(True)
     finetune_model = model.module if hasattr(model, "module") else model
-    if hasattr(finetune_model, "patch_embed") and not any(
-        param.requires_grad for param in finetune_model.patch_embed.parameters()
+    finetune_backbone = getattr(finetune_model, "backbone", finetune_model)
+    if hasattr(finetune_backbone, "patch_embed") and not any(
+        param.requires_grad for param in finetune_backbone.patch_embed.parameters()
     ):
-        finetune_model.patch_embed.eval()
-    if hasattr(finetune_model, "corrector") and not any(
-        param.requires_grad for param in finetune_model.corrector.parameters()
+        finetune_backbone.patch_embed.eval()
+    if hasattr(finetune_backbone, "corrector") and not any(
+        param.requires_grad for param in finetune_backbone.corrector.parameters()
     ):
         # Stage 2 使用冻结的 Stage 1 embedding 模块。
-        finetune_model.corrector.eval()
+        finetune_backbone.corrector.eval()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('min_lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))

@@ -2,13 +2,15 @@
 
 import json
 import pickle
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
 import torch
 from scipy.signal import resample
 from torch.utils.data import Dataset
+
+from Channels_definition import BCIIV2A_13_CHANNELS, BCIIV2A_22_CHANNELS
 
 
 EXPECTED_MULTISESSION_SPLITS = {
@@ -19,7 +21,13 @@ EXPECTED_MULTISESSION_SPLITS = {
 
 
 class BCIIV2AMultiSessionLoader(Dataset):
-    """Load one AdaBrain BCI-IV-2a multi-session JSON split."""
+    """Load one AdaBrain BCI-IV-2a multi-session JSON split.
+
+    Each item always has the six-field interface used by ERP CORE:
+    ``(x, label, x_obs, x_full, subject, task)``.  ``x`` follows the
+    requested ``channel_names``; ``x_obs`` is the fixed 13-channel input and
+    ``x_full`` is the full 22-channel target.
+    """
 
     def __init__(
         self,
@@ -48,15 +56,15 @@ class BCIIV2AMultiSessionLoader(Dataset):
         self.manifest_channel_names = [
             str(name).upper() for name in info["ch_names"]
         ]
-        full_mean_value = np.asarray(info["mean"], dtype=np.float64)[:, None]
-        full_std_value = np.asarray(info["std"], dtype=np.float64)[:, None]
+        self.full_mean_value = np.asarray(info["mean"], dtype=np.float64)[:, None]
+        self.full_std_value = np.asarray(info["std"], dtype=np.float64)[:, None]
         self.normalize_method = normalize_method
         self.factor = factor
 
         num_manifest_channels = len(self.manifest_channel_names)
-        if full_mean_value.shape != (num_manifest_channels, 1):
+        if self.full_mean_value.shape != (num_manifest_channels, 1):
             raise ValueError(f"Mean/channel mismatch in {self.json_path}")
-        if full_std_value.shape != (num_manifest_channels, 1):
+        if self.full_std_value.shape != (num_manifest_channels, 1):
             raise ValueError(f"Std/channel mismatch in {self.json_path}")
         if not self.files:
             raise ValueError(f"BCI-IV-2a split is empty: {self.json_path}")
@@ -80,8 +88,34 @@ class BCIIV2AMultiSessionLoader(Dataset):
         self.channel_indices = [
             self.manifest_channel_names.index(name) for name in self.channel_names
         ]
-        self.mean_value = full_mean_value[self.channel_indices]
-        self.std_value = full_std_value[self.channel_indices]
+        self.mean_value = self.full_mean_value[self.channel_indices]
+        self.std_value = self.full_std_value[self.channel_indices]
+        # 找到 13 个观测通道的位置
+        self.observed_channel_names = [name.upper() for name in BCIIV2A_13_CHANNELS]
+        # 在完整 22 通道列表中查找这些通道的位置
+        self.observed_indices_in_full = [
+            self.manifest_channel_names.index(name)
+            for name in self.observed_channel_names
+        ]
+        
+        # 保存每个样本的标签和被试编号
+        self.labels = np.asarray(
+            [int(record["label"]) for record in self.files], dtype=np.int64
+        )
+        self.subject_values = np.asarray(
+            [int(record["subject_id"]) for record in self.files], dtype=np.int64
+        )
+        # 取所有被试编号
+        self.subjects = tuple(sorted(set(self.subject_values.tolist())))
+        
+        # 按被试和任务建立样本索引
+        self.subject_indices = defaultdict(list)
+        self.task_indices = defaultdict(list)
+        for local_index, (subject, task) in enumerate(
+            zip(self.subject_values, self.labels)
+        ):
+            self.subject_indices[int(subject)].append(local_index)
+            self.task_indices[int(task)].append(local_index)
 
     def __len__(self):
         return len(self.files)
@@ -91,7 +125,7 @@ class BCIIV2AMultiSessionLoader(Dataset):
 
     def _normalize(self, X):
         if self.normalize_method == "z_score":
-            return (X - self.mean_value) / (self.std_value + 1e-8)
+            return (X - self.full_mean_value) / (self.full_std_value + 1e-8)
         if self.normalize_method == "0.1mv":
             return X / self.factor
         if self.normalize_method == "95":
@@ -115,21 +149,38 @@ class BCIIV2AMultiSessionLoader(Dataset):
                 f"Channel mismatch in {file_path}: got {X.shape[0]}, "
                 f"expected {len(self.manifest_channel_names)}"
             )
-        X = X[self.channel_indices]
         if self.sampling_rate != self.default_rate:
             sample_count = int(X.shape[-1] * self.sampling_rate / self.default_rate)
             X = resample(X, sample_count, axis=-1)
-        X = self._normalize(X)
+        x_full = self._normalize(X)
+        x_obs = x_full[self.observed_indices_in_full]
+        x = x_full[self.channel_indices]
 
         # Match AdaBrain: the pkl label is authoritative; JSON has a duplicate.
         Y = int(float(sample["Y"]))
-        return torch.as_tensor(X, dtype=torch.float32), Y
+        subject = int(self.subject_values[index])
+        task = Y
+        x_tensor = torch.as_tensor(x, dtype=torch.float32).contiguous()
+        # Keep the BCI-IV-2a loader interface aligned with ERP CORE.  The
+        # classification engines consume the first two fields; Dynamic Stage
+        # 1 additionally consumes the observed/full signals and metadata.
+        return (
+            x_tensor,
+            Y,
+            torch.as_tensor(x_obs, dtype=torch.float32).contiguous(),
+            torch.as_tensor(x_full, dtype=torch.float32).contiguous(),
+            subject,
+            task,
+        )
 
 
 def prepare_BCIIV2A_multisession_dataset(
-    root, sampling_rate=200, normalize_method="z_score", channel_names=None
+    root,
+    sampling_rate=200,
+    normalize_method="z_score",
+    channel_names=None,
 ):
-    """Build AdaBrain's train-session/validation/test-session split."""
+    """Build AdaBrain's splits with the shared six-field sample interface."""
 
     root = Path(root)
     datasets = {

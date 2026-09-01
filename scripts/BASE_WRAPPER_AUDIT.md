@@ -106,6 +106,9 @@ O/N/A 定义：
 
 这是最适合第一个迁移的数据集。A full-finetune 已改为复用 A freeze CMD 的 wrapper；其余 5 个脚本仍重复维护 CMD。
 
+Dynamic D 另使用两阶段 wrapper：`D/stage1.sh` 训练 13 → 22 通道 corrector，
+`D/stage2.sh` 加载并冻结该 corrector 后执行分类；它们不是上表旧脚本的无行为变化迁移。
+
 ### 3.4 EEGMAT
 
 | 当前脚本 | O/N/A | freeze/full | completion | classifier | 建议 wrapper 名称 | 无行为变化迁移 |

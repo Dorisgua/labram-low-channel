@@ -464,8 +464,34 @@ class DynamicNeuralTransformer(nn.Module):
             torch.as_tensor(miss_indices, dtype=torch.long, device=device), #[0, 2, 4]
         )
 
+    def _completion_prototypes(self):
+        # 取出对应任务的 prototype
+        prototype_by_scope = {
+            "tuev13_with_tuev23": self.tuev23_channel_prototypes,
+            "bciiv2a13_with_bciiv2a22": self.bciiv2a22_channel_prototypes,
+            "physionet23_with_physionet64": self.physionet64_channel_prototypes,
+            "physionet32_with_physionet64": self.physionet64_channel_prototypes,
+            "seedv23_with_seedv62": self.seedv62_channel_prototypes,
+            "seed23_with_seed62": self.seed62_channel_prototypes,
+            "tuev23_with_seedv62_extra": self.tuev23_with_seedv62_extra_channel_prototypes,
+            "hgd20_with_hgd78": self.hgd78_channel_prototypes,
+            "eegmat8_with_eegmat19": self.eegmat19_channel_prototypes,
+            "siena13_with_siena29": self.siena29_channel_prototypes,
+            "attention10_with_attention26": self.attention26_channel_prototypes,
+            "erpcore12_with_erpcore28": self.erpcore28_channel_prototypes,
+        }
+        try:
+            return prototype_by_scope[self.completion_scope]
+        except KeyError as error:
+            raise ValueError(
+                f"Unsupported completion_scope: {self.completion_scope}"
+            ) from error
+
     def _encode_dynamic_tokens(self, h_obs):
-        prototypes = self.erpcore28_channel_prototypes.to(dtype=h_obs.dtype)
+        prototypes = self._completion_prototypes().to(
+            device=h_obs.device,
+            dtype=h_obs.dtype,
+        )
         obs_indices, miss_indices = self._dynamic_channel_indices(h_obs.device)
 
         batch_size, _, num_t, _ = h_obs.shape
@@ -579,45 +605,8 @@ class DynamicNeuralTransformer(nn.Module):
             # [B, N * A, C] -> [B, N, A, C]
             x_real = x_real.reshape(batch_size, n, input_time_window, self.embed_dim)
 
-            # 根据 completion_scope 选择对应的 target prototype。
-            if self.completion_scope == "tuev13_with_tuev23":
-                # prototypes: [23, embed_dim]
-                prototypes = self.tuev23_channel_prototypes
-            elif self.completion_scope == "bciiv2a13_with_bciiv2a22":
-                # prototypes: [22, embed_dim]
-                prototypes = self.bciiv2a22_channel_prototypes
-            elif self.completion_scope == "physionet23_with_physionet64":
-                # prototypes: [64, embed_dim]
-                prototypes = self.physionet64_channel_prototypes
-            elif self.completion_scope == "physionet32_with_physionet64":
-                # prototypes: [64, embed_dim]
-                prototypes = self.physionet64_channel_prototypes
-            elif self.completion_scope == "seedv23_with_seedv62":
-                # prototypes: [62, embed_dim]
-                prototypes = self.seedv62_channel_prototypes
-            elif self.completion_scope == "seed23_with_seed62":
-                # SEED 36A: 23 real channels completed to the native 62-channel montage.
-                prototypes = self.seed62_channel_prototypes
-            elif self.completion_scope == "tuev23_with_seedv62_extra":
-                # prototypes: [70, embed_dim]
-                prototypes = self.tuev23_with_seedv62_extra_channel_prototypes
-            elif self.completion_scope == "hgd20_with_hgd78":
-                # HGD 39A: 20 real motor-cortex channels completed to HGD-78.
-                prototypes = self.hgd78_channel_prototypes
-            elif self.completion_scope == "eegmat8_with_eegmat19":
-                # EEGMAT 37A: 8 real channels completed to the native 19-channel montage.
-                prototypes = self.eegmat19_channel_prototypes
-            elif self.completion_scope == "siena13_with_siena29":
-                # Siena 40A: 13 real channels completed to the native 29-channel montage.
-                prototypes = self.siena29_channel_prototypes
-            elif self.completion_scope == "attention10_with_attention26":
-                # Attention 44A: 10 real channels completed to the native 26-channel montage.
-                prototypes = self.attention26_channel_prototypes
-            elif self.completion_scope == "erpcore12_with_erpcore28":
-                # ERP CORE: 12 real channels completed to the 28-channel target.
-                prototypes = self.erpcore28_channel_prototypes
-            else:
-                raise ValueError(f"Unsupported completion_scope: {self.completion_scope}")
+            # Stage 1 与 Stage 2 共用同一个 completion_scope -> prototype 映射。
+            prototypes = self._completion_prototypes()
 
             target_channels_num = prototypes.shape[0]  # 当前 token 对应的通道数
 
@@ -673,9 +662,13 @@ class DynamicNeuralTransformer(nn.Module):
                 #   target 空间里对应通道的位置。
                 x_full[:, target_i, :, :] = x_real[:, real_i, :, :]
 
-            # Dynamic ERP CORE 不再让缺失导联一直保持静态 prototype，
-            # 而是直接用当前 DynamicNeuralTransformer 内部的 corrector 预测。
-            if self.completion_scope == "erpcore12_with_erpcore28":
+            # Dynamic Stage 2 不让缺失导联保持静态 prototype，而是使用
+            # Stage 1 训练得到的 corrector 预测缺失通道 token。
+            dynamic_completion_scopes = {
+                "bciiv2a13_with_bciiv2a22",
+                "erpcore12_with_erpcore28",
+            }
+            if self.completion_scope in dynamic_completion_scopes:
                 dynamic_outputs = self._encode_dynamic_tokens(x_real)
                 expected_obs_indices = torch.as_tensor(
                     real_channel_indices_in_target_tensor,

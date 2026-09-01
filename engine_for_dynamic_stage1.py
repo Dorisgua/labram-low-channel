@@ -14,6 +14,7 @@ import torch
 from timm.utils import ModelEma
 import utils
 from einops import rearrange
+from data_processor.pair_sampling import sample_cslpae_pair_batch
 from losses_dynamic import compute_stage1_losses
 
 # 原分类模型调用：
@@ -45,7 +46,8 @@ def train_dynamic_stage1_batch(model, x_obs, x_full,
 
 
 def _prepare_cslpae_pair(dataset, property_name, batch_size, device, input_scale):
-    left, right, num_groups, samples_per_group = dataset.sample_cslpae_pair_batch(
+    left, right, num_groups, samples_per_group = sample_cslpae_pair_batch(
+        dataset,
         property_name,
         batch_size,
     )
