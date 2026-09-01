@@ -6,7 +6,7 @@ set -euo pipefail
 # torchrun、日志、输出与前后台执行统一复用 scripts/base.sh。
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-
+# echo $SCRIPT_DIR
 : "${DATASET:?DATASET must be set by the dataset wrapper}"
 : "${DATA_PATH:?DATA_PATH must be set by the dataset wrapper}"
 : "${CHANNEL_SUBSET:?CHANNEL_SUBSET must be set by the dataset wrapper}"

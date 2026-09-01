@@ -526,6 +526,7 @@ class DynamicNeuralTransformer(nn.Module):
         d_task = self.correction_scale * torch.tanh(
             task_missing.reshape(missing_shape)
         )
+        # import pdb;pdb.set_trace()
         h_pred_miss = p_miss + d_sub + d_task
         return {
             "h_obs": h_obs,

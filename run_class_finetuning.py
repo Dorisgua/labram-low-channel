@@ -941,6 +941,9 @@ def main(args, ds_init):
         if args.classifier_mode == "adabrain_mlp_token":
             wrapper_kwargs["dropout"] = args.drop
 
+        # Initialize the shared classifier head identically for A and Dynamic
+        # models; constructing the Dynamic corrector consumes RNG state first.
+        # torch.manual_seed(seed)
         model = wrapper_cls(
             backbone=model,
             num_channels=token_channels,
