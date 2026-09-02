@@ -108,6 +108,7 @@ LR 不同，因此分成两行。
 |---|---|---|---|---|---|---|
 | BCI-IV-2a (multi session) | ✅<br>Acc O/A/N：55.48% > 54.71% > 52.70%<br>BAcc O/A/N：55.48% > 54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.70%<br>BAcc A/N：54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.39%<br>BAcc A/N：54.71% > 52.39% | Test Acc：58.87%<br>Test BAcc：58.87% | —<br>D 脚本已加入，尚未完成实验 | AdaBrain<br>Test BAcc：60.75% |
 | ERP-Core | △<br>Acc O/A/N：57.60% / 61.38% / 60.59%<br>BAcc O/A/N：44.36% > 40.29% > 39.73% | ✅<br>Acc A/N：61.38% > 60.59%<br>BAcc A/N：40.29% > 39.73% | ❌<br>Acc A/N：61.38% < 64.42%<br>BAcc A/N：40.29% < 45.42% | Test Acc：64.61%<br>Test BAcc：48.91% | ❌<br>Acc D/A：54.66% < 61.38%<br>BAcc D/A：39.61% < 40.29% | CSLP<br>Test Acc：48.48±0.34%  |
+| ERP-Core（bs=256，lr=1e-4） | —<br>缺少 O freeze 对照 | △<br>Acc A/N：58.07% < 61.10%<br>BAcc A/N：43.01% > 40.87% | ❌<br>Acc A/N：58.07% < 62.50%<br>BAcc A/N：43.01% < 44.11% | —<br>缺少 O full finetune 对照 | △<br>Smooth L1<br>Acc D/A：58.87% > 58.07%<br>BAcc D/A：42.05% < 43.01% | CSLP<br>Test Acc：48.48±0.34% |
 | TUEV | ❌<br>Acc O/A/N：71.64% / 71.58% / 74.19%<br>BAcc O/A/N：53.27% / 54.37% / 61.67% | ❌<br>Acc A/N：71.58% < 74.19%<br>BAcc A/N：54.37% < 61.67% | ❌<br>Acc A/N：71.58% < 74.63%<br>BAcc A/N：54.37% < 60.47% | Test Acc：74.19%<br>Test BAcc：61.92% | —<br>尚未进行 D 实验 | LaBraM<br>Test BAcc：64.09 ± 0.65 |
 | PhysioNet-32 | ✅<br>Acc O/A/N：62.86% > 54.36% > 53.62%<br>BAcc O/A/N：62.88% > 54.37% > 53.65% | ✅<br>Acc A/N：54.36% > 53.62%<br>BAcc A/N：54.37% > 53.65% | ❌<br>Acc A/N：54.36% < 55.31%<br>BAcc A/N：54.37% < 55.33% | Test Acc：63.07%<br>Test BAcc：63.09% | —<br>尚未进行 D 实验 | EEG-FM-Bench（修正）<br>Test BAcc：57.52 ± 0.27 |
 | SEED | ✅<br>Acc O/A/N：56.16% > 55.08% > 54.32%<br>BAcc O/A/N：55.84% > 54.60% > 53.90% | ✅<br>Acc A/N：55.08% > 54.32%<br>BAcc A/N：54.60% > 53.90% | ❌<br>Acc A/N：55.08% < 55.34%<br>BAcc A/N：54.60% < 54.84% | Test Acc：55.36%<br>Test BAcc：55.01% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：55.78 |
@@ -125,6 +126,12 @@ Val BAcc 选择 best checkpoint。D 数值来自当前 dynamic 仓库最新完�
 `erp_core_D_stage2_seed1_20260831_032343`，同样按 Val BAcc 选择 best checkpoint。
 由于 A 与 D 的 seed 不一致，当前 `D > A` 只能作为已有结果对照；严格结论需要补跑
 D seed 0，或补跑 A seed 1 后进行 matching-seed 比较。
+
+ERP-Core（bs=256，lr=1e-4）一行使用当前仓库 2026-09-02 完成的 seed 0 日志，均按
+Val BAcc 选择 best checkpoint：A 为 `erp_core_A_freeze_cnn_seed0_20260902_091349`，
+N full finetune 为 `erp_core_N_full_finetune_seed0_20260902_092201`，D 为使用 Smooth L1
+Stage 1 checkpoint 的
+`p_miss_add_Lmissingmae_delta_bs256_lr1e4_epoch200_missingw2_chk82_seed0_20260902_084748`。
 
 
 
