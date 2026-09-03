@@ -32,8 +32,16 @@ def train_dynamic_stage1_batch(model, x_obs, x_full,
                                sub_pair_inputs=None, task_pair_inputs=None):
     stage1_model = model.module if hasattr(model, "module") else model
     outputs = stage1_model.forward_stage1(x_obs, x_full)
-    sub_pair_outputs = _forward_cslpae_pair(stage1_model, sub_pair_inputs)
-    task_pair_outputs = _forward_cslpae_pair(stage1_model, task_pair_inputs)
+    sub_pair_outputs = _forward_cslpae_pair(
+        stage1_model,
+        sub_pair_inputs,
+        permutation="subject" if permute_sub_weight > 0.0 else None,
+    )
+    task_pair_outputs = _forward_cslpae_pair(
+        stage1_model,
+        task_pair_inputs,
+        permutation="task" if permute_task_weight > 0.0 else None,
+    )
     losses = compute_stage1_losses(
         outputs, missing_weight, reg_weight,
         subject_summary_contra_weight, task_summary_contra_weight,
@@ -71,13 +79,37 @@ def _prepare_cslpae_pair(dataset, property_name, batch_size, device, input_scale
     )
 
 
-def _forward_cslpae_pair(stage1_model, pair_inputs):
+def _forward_cslpae_pair(stage1_model, pair_inputs, permutation=None):
     if pair_inputs is None:
         return None
     left_x_obs, left_x_full, right_x_obs, right_x_full, groups, samples = pair_inputs
+    left = stage1_model.forward_stage1(left_x_obs, left_x_full)
+    right = stage1_model.forward_stage1(right_x_obs, right_x_full)
+
+    if permutation == "subject":
+        _, left_delta = stage1_model._cross_attention_delta(
+            left["p_miss"], left["task_missing"], right["subject_missing"]
+        )
+        _, right_delta = stage1_model._cross_attention_delta(
+            right["p_miss"], right["task_missing"], left["subject_missing"]
+        )
+    elif permutation == "task":
+        _, left_delta = stage1_model._cross_attention_delta(
+            left["p_miss"], right["task_missing"], left["subject_missing"]
+        )
+        _, right_delta = stage1_model._cross_attention_delta(
+            right["p_miss"], left["task_missing"], right["subject_missing"]
+        )
+    elif permutation is not None:
+        raise ValueError(f"Unsupported permutation: {permutation}")
+
+    if permutation is not None:
+        left["h_pred_permuted"] = left["p_miss"] + left_delta
+        right["h_pred_permuted"] = right["p_miss"] + right_delta
+
     return (
-        stage1_model.forward_stage1(left_x_obs, left_x_full),
-        stage1_model.forward_stage1(right_x_obs, right_x_full),
+        left,
+        right,
         groups,
         samples,
     )

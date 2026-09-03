@@ -36,17 +36,24 @@ def compute_stage1_losses(
     """Dynamic Stage 1：重建、正则和 CSLP loss。"""
     required = {
         "h_pred_miss", "h_miss_target", "p_miss",
-        "z_sub", "z_task", "d_sub", "d_task",
+        "z_sub", "z_task", "d_sub", "d_task", "delta",
     }
     missing = required.difference(outputs)
     if missing:
         raise ValueError(f"forward_stage1 output is missing keys: {sorted(missing)}")
-
-    loss_missing = reconstruction_mse(
-        outputs["h_pred_miss"],
-        outputs["h_miss_target"],
+    # import pdb;pdb.set_trace()
+    
+    # loss_missing = reconstruction_mse(
+    #     outputs["h_pred_miss"],
+    #     outputs["h_miss_target"],
+    # )
+    loss_missing = F.smooth_l1_loss(
+      outputs["h_pred_miss"],
+      outputs["h_miss_target"],
+      beta=0.05,
     )
-    loss_reg = outputs["d_sub"].square().mean() + outputs["d_task"].square().mean()
+    
+    loss_reg = outputs["delta"].square().mean()
 
     zero = outputs["h_pred_miss"].sum() * 0.0
 
@@ -68,9 +75,9 @@ def compute_stage1_losses(
         )
         loss_permute_sub = (
             swap_sub_reconstruction(
-                sub_left["p_miss"] + sub_right["d_sub"] + sub_left["d_task"],
+                sub_left["h_pred_permuted"],
                 sub_left["h_miss_target"],
-                sub_right["p_miss"] + sub_left["d_sub"] + sub_right["d_task"],
+                sub_right["h_pred_permuted"],
                 sub_right["h_miss_target"],
             )
             if permute_sub_weight > 0.0 else zero
@@ -98,9 +105,9 @@ def compute_stage1_losses(
         )
         loss_permute_task = (
             swap_task_reconstruction(
-                task_left["p_miss"] + task_left["d_sub"] + task_right["d_task"],
+                task_left["h_pred_permuted"],
                 task_left["h_miss_target"],
-                task_right["p_miss"] + task_right["d_sub"] + task_left["d_task"],
+                task_right["h_pred_permuted"],
                 task_right["h_miss_target"],
             )
             if permute_task_weight > 0.0 else zero

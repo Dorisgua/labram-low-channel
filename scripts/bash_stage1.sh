@@ -30,7 +30,7 @@ export FREEZE_CNN="1"
 # export DISABLE_REL_POS_BIAS="0"
 # export DISABLE_QKV_BIAS="0"
 export NO_AUTO_RESUME="1"
-export MASTER_PORT="${MASTER_PORT:-29562}"
+export MASTER_PORT="${MASTER_PORT:-29568}"
 
 # 兼容旧 Stage 1 的 RUN_BACKGROUND；统一执行器使用 RUN_FOREGROUND。
 if [[ -n "${RUN_BACKGROUND+x}" && -z "${RUN_FOREGROUND+x}" ]]; then

@@ -383,6 +383,27 @@ class DynamicNeuralTransformer(nn.Module):
             "shared_norm": nn.LayerNorm(embed_dim),
             "subject_norm": nn.LayerNorm(embed_dim),
             "task_norm": nn.LayerNorm(embed_dim),
+            "prototype_query_norm": nn.LayerNorm(embed_dim),
+            "cross_attentions": nn.ModuleList([
+                nn.MultiheadAttention(
+                    embed_dim, 4, dropout=0.1, batch_first=True
+                ) for _ in range(2)
+            ]),
+            "cross_attention_norms": nn.ModuleList([
+                nn.LayerNorm(embed_dim) for _ in range(2)
+            ]),
+            "cross_ffns": nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(embed_dim, 800),
+                    nn.GELU(),
+                    nn.Dropout(0.1),
+                    nn.Linear(800, embed_dim),
+                    nn.Dropout(0.1),
+                ) for _ in range(2)
+            ]),
+            "cross_ffn_norms": nn.ModuleList([
+                nn.LayerNorm(embed_dim) for _ in range(2)
+            ]),
         })
         self.correction_scale = float(correction_scale)
 
@@ -487,6 +508,30 @@ class DynamicNeuralTransformer(nn.Module):
                 f"Unsupported completion_scope: {self.completion_scope}"
             ) from error
 
+    def _cross_attention_delta(self, p_miss, task_missing, subject_missing):
+        p_miss_flat = p_miss.flatten(1, 2)
+        query = self.corrector["prototype_query_norm"](p_miss_flat)
+        fusion = query
+        for attention, attention_norm, ffn, ffn_norm in zip(
+                self.corrector["cross_attentions"],
+                self.corrector["cross_attention_norms"],
+                self.corrector["cross_ffns"],
+                self.corrector["cross_ffn_norms"]):
+            attended, _ = attention(
+                query=fusion,
+                key=task_missing,
+                value=subject_missing,
+                need_weights=False,
+            )
+            fusion = attention_norm(fusion + attended)
+            fusion = ffn_norm(fusion + ffn(fusion))
+
+        # The stack contains residual query updates; return only its change so
+        # the original prototype is added exactly once by the caller.
+        fusion = fusion - query
+        delta = self.correction_scale * fusion
+        return fusion.reshape_as(p_miss), delta.reshape_as(p_miss)
+
     def _encode_dynamic_tokens(self, h_obs):
         prototypes = self._completion_prototypes().to(
             device=h_obs.device,
@@ -520,14 +565,36 @@ class DynamicNeuralTransformer(nn.Module):
         subject_missing = subject_tokens[:, num_obs_tokens:, :]
         task_missing = task_tokens[:, num_obs_tokens:, :]
         missing_shape = p_miss.shape
-        d_sub = self.correction_scale * torch.tanh(
-            subject_missing.reshape(missing_shape)
+
+        # d_sub = self.correction_scale * torch.tanh(
+        #     subject_missing.reshape(missing_shape)
+        # )
+        # d_task = self.correction_scale * torch.tanh(
+        #     task_missing.reshape(missing_shape)
+        # )
+        # # import pdb;pdb.set_trace()
+        # h_pred_miss = p_miss + d_sub + d_task
+
+        fusion, delta = self._cross_attention_delta(
+            p_miss,
+            task_missing,
+            subject_missing,
         )
-        d_task = self.correction_scale * torch.tanh(
-            task_missing.reshape(missing_shape)
-        )
+        h_pred_miss = p_miss + delta
+
+        # Keep the legacy output names for contrastive-loss compatibility, but
+        # expose the normalized subject/task representations without tanh or
+        # correction_scale. Permutation now swaps K/V and recomputes delta.
+        # d_sub = self.correction_scale * torch.tanh(
+        #     subject_missing.reshape(missing_shape)
+        # )
+        # d_task = self.correction_scale * torch.tanh(
+        #     task_missing.reshape(missing_shape)
+        # )
+        d_sub = subject_missing.reshape(missing_shape)
+        d_task = task_missing.reshape(missing_shape)
+
         # import pdb;pdb.set_trace()
-        h_pred_miss = p_miss + d_sub + d_task
         return {
             "h_obs": h_obs,
             "p_all": p_all,
@@ -538,6 +605,10 @@ class DynamicNeuralTransformer(nn.Module):
             "z_task": task_missing.mean(dim=1),
             "d_sub": d_sub,
             "d_task": d_task,
+            "subject_missing": subject_missing,
+            "task_missing": task_missing,
+            "fusion": fusion,
+            "delta": delta,
             "h_pred_miss": h_pred_miss,
         }
 

@@ -7,17 +7,19 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 # export DATA_PATH="${DATA_PATH:-${REPO_DIR}/preprocessing/BCI-IV-2A/multi_subject_json}"
-export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-bciiv2a_D_stage2}"
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-bciiv2a_D_stage2/p_miss_add_delta}"
+export RUN_PREFIX_OVERRIDE="${RUN_PREFIX_OVERRIDE:-p_miss_add_delta}"
 export MODEL="${MODEL:-labram_dynamic_base_patch200_200}"
 
-export STAGE1_CHECKPOINT="${STAGE1_CHECKPOINT:-${REPO_DIR}/outputs/bciiv2a/bciiv2a_D_stage1/checkpoint-best.pth}"
+export STAGE1_CHECKPOINT="${STAGE1_CHECKPOINT:-${REPO_DIR}/outputs/bciiv2a/bciiv2a_D_stage1/p_miss_add_delta/checkpoint-best.pth}"
+# export STAGE1_CHECKPOINT="${STAGE1_CHECKPOINT:-${REPO_DIR}/outputs/bciiv2a/bciiv2a_D_stage1/checkpoint-best.pth}"
 export FINETUNE="${FINETUNE:-${STAGE1_CHECKPOINT}}"
 
 export CHANNEL_SUBSET="bciiv2a13"
 export COMPLETION_SCOPE="bciiv2a13_with_bciiv2a22"
 export POOLING_SCOPE="high"
 export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/prototypes/01_bciiv2a22_cnn_patch_embed_mean.pth}"
-export CORRECTION_SCALE="${CORRECTION_SCALE:-0}"
+export CORRECTION_SCALE="${CORRECTION_SCALE:-1}"
 
 export CLASSIFIER_MODE="adabrain_all_token"
 export CLASSIFIER_TOKEN_SCOPE="real"
