@@ -502,8 +502,8 @@ class NeuralTransformer(nn.Module):
             elif self.completion_scope == "attention10_with_attention26":
                 # Attention 44A: 10 real channels completed to the native 26-channel montage.
                 prototypes = self.attention26_channel_prototypes
-            elif self.completion_scope == "erpcore12_with_erpcore28":
-                # ERP CORE: 12 real channels completed to the 28-channel target.
+            elif self.completion_scope in {"erpcore12_with_erpcore28", "erpcore14_with_erpcore28"}:
+                # ERP CORE: 12/14 real channels completed to the 28-channel target.
                 prototypes = self.erpcore28_channel_prototypes
             else:
                 raise ValueError(f"Unsupported completion_scope: {self.completion_scope}")

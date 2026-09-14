@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 
 from Channels_definition import (
     ERPCORE_12_CHANNELS,
+    ERPCORE_14_CHANNELS,
     ERPCORE_28_CHANNELS,
     ERPCORE_30_CHANNELS,
 )
@@ -114,10 +115,13 @@ class ERPCOREPtLoader(Dataset):
         #     [self.manifest_channel_names.index(name) for name in self.channel_names],
         #     dtype=np.int64,
         # )
-        # 固定 12 导联观测空间和 28 导联目标空间，并分别计算它们在
+        # 使用当前少导联布局作为观测空间；28 导联实验仍保留 12 导联 x_obs。
         # 原始 30 通道及目标 28 通道中的位置，保证后续抽取顺序一致。
-        self.observed_channel_names = list(ERPCORE_12_CHANNELS)
         self.full_channel_names = list(ERPCORE_28_CHANNELS)
+        self.use_full_input = self.channel_names == self.full_channel_names
+        self.observed_channel_names = list(
+            ERPCORE_12_CHANNELS if self.use_full_input else self.channel_names
+        )
         self.full_channel_indices = np.asarray(
             [self.manifest_channel_names.index(name) for name in self.full_channel_names],
             dtype=np.int64,
@@ -126,7 +130,6 @@ class ERPCOREPtLoader(Dataset):
             [self.full_channel_names.index(name) for name in self.observed_channel_names],
             dtype=np.int64,
         )
-        self.use_full_input = self.channel_names == self.full_channel_names
         self.mean = torch.as_tensor(mean, dtype=torch.float32)
         self.std = torch.as_tensor(std, dtype=torch.float32)
         self.target_samples = int(target_samples)
@@ -254,16 +257,17 @@ def prepare_ERPCORE_pt_dataset(
     #     [ERPCORE_30_CHANNELS.index(name) for name in channel_names],
     #     dtype=np.int64,
     # )
-    # 只接受实验协议中的 12/28 导联布局，并生成目标 28 导联在
+    # 只接受实验协议中的 12/14/28 导联布局，并生成目标 28 导联在
     # 原始 30 通道中的索引，用于统一计算 x_full 的训练集统计量。
     supported_channel_layouts = {
         tuple(ERPCORE_12_CHANNELS),
+        tuple(ERPCORE_14_CHANNELS),
         tuple(ERPCORE_28_CHANNELS),
     }
     if tuple(channel_names) not in supported_channel_layouts:
         raise ValueError(
-            "ERP CORE channel_names must equal ERPCORE_12_CHANNELS or "
-            "ERPCORE_28_CHANNELS"
+            "ERP CORE channel_names must equal ERPCORE_12_CHANNELS, "
+            "ERPCORE_14_CHANNELS, or ERPCORE_28_CHANNELS"
         )
     full_channel_indices = np.asarray([ERPCORE_30_CHANNELS.index(name) for name in ERPCORE_28_CHANNELS], dtype=np.int64)
 
