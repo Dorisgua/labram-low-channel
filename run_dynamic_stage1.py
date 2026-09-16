@@ -79,6 +79,7 @@ from Channels_definition import (
     SIENA_29_CHANNELS,
     ERPCORE_12_CHANNELS,
     ERPCORE_14_CHANNELS,
+    ERPCORE_21_CHANNELS,
     ERPCORE_28_CHANNELS,
 )
 
@@ -247,7 +248,8 @@ def get_args():
                                  'seedv23_with_seedv62', 'tuev23_with_seedv62_extra',
                                  'hgd20_with_hgd78', 'eegmat8_with_eegmat19',
                                  'siena13_with_siena29', 'attention10_with_attention26',
-                                 'erpcore12_with_erpcore28', 'erpcore14_with_erpcore28'],
+                                 'erpcore12_with_erpcore28', 'erpcore14_with_erpcore28',
+                                 'erpcore21_with_erpcore28'],
                         help='target channel completion scope')
     parser.add_argument('--pooling_scope', default='low', type=str,
                         choices=['low', 'high'],
@@ -497,6 +499,7 @@ DATASET_CONFIGS = {
         'ch_names': {
             'erpcore12': ERPCORE_12_CHANNELS,
             'erpcore14': ERPCORE_14_CHANNELS,
+            'erpcore21': ERPCORE_21_CHANNELS,
             'erpcore28': ERPCORE_28_CHANNELS,
         },
         'pass_channel_names': True,
@@ -652,6 +655,7 @@ def _validate_completion_prototype(args, ch_names, target_ch_names, target_input
         "attention10_with_attention26": ATTENTION_26_CHANNELS,
         "erpcore12_with_erpcore28": ERPCORE_28_CHANNELS,
         "erpcore14_with_erpcore28": ERPCORE_28_CHANNELS,
+        "erpcore21_with_erpcore28": ERPCORE_28_CHANNELS,
     }.get(args.completion_scope)
     if expected_target_ch_names is None:
         raise ValueError(f"Unsupported completion_scope: {args.completion_scope}")
@@ -921,7 +925,10 @@ def main(args, ds_init):
             model.siena29_channel_prototypes.copy_(prototypes)
         elif args.completion_scope == "attention10_with_attention26":
             model.attention26_channel_prototypes.copy_(prototypes)
-        elif args.completion_scope in {"erpcore12_with_erpcore28", "erpcore14_with_erpcore28"}:
+        elif args.completion_scope in {
+            "erpcore12_with_erpcore28", "erpcore14_with_erpcore28",
+            "erpcore21_with_erpcore28",
+        }:
             model.erpcore28_channel_prototypes.copy_(prototypes)
         else:
             raise ValueError(f"Unsupported completion_scope: {args.completion_scope}")

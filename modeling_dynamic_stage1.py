@@ -480,6 +480,7 @@ class DynamicNeuralTransformer(nn.Module):
             "attention10_with_attention26": self.attention26_channel_prototypes,
             "erpcore12_with_erpcore28": self.erpcore28_channel_prototypes,
             "erpcore14_with_erpcore28": self.erpcore28_channel_prototypes,
+            "erpcore21_with_erpcore28": self.erpcore28_channel_prototypes,
         }
         try:
             return prototype_by_scope[self.completion_scope]
@@ -670,6 +671,7 @@ class DynamicNeuralTransformer(nn.Module):
                 "bciiv2a13_with_bciiv2a22",
                 "erpcore12_with_erpcore28",
                 "erpcore14_with_erpcore28",
+                "erpcore21_with_erpcore28",
             }
             if self.completion_scope in dynamic_completion_scopes:
                 dynamic_outputs = self._encode_dynamic_tokens(x_real)

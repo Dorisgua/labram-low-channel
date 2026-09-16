@@ -165,6 +165,12 @@ ERPCORE_14_CHANNELS = [#在12的基础上加上C4和C5
     "C3", "C4", "C5", "C6", "P3", "P4", "O1", "O2",
 ]
 
+ERPCORE_21_CHANNELS = [#在12的基础上加上C4和C5 、P8 P7 PO7 FC3 PO3 FC4 PO4
+    "FP1", "FP2", "F3", "F4", "F7", "F8",
+    "C3", "C4", "C5", "C6", "P3", "P4", "O1", "O2",
+    "P8", "P7", "PO7", "FC3", "PO3", "FC4", "PO4",
+]
+
 
 # OpenNeuro ds005416 24-channel subset retained for older artifacts.
 FATIG_24_CHANNELS = [
