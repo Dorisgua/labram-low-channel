@@ -384,7 +384,7 @@ class DynamicNeuralTransformer(nn.Module):
             "subject_norm": nn.LayerNorm(embed_dim),
             "task_norm": nn.LayerNorm(embed_dim),
         })
-        self.correction_scale = float(correction_scale)
+        # 保留 correction_scale 参数兼容旧调用；修正分支不再缩放。
 
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=.02)
@@ -522,12 +522,8 @@ class DynamicNeuralTransformer(nn.Module):
         subject_missing = subject_tokens[:, num_obs_tokens:, :]
         task_missing = task_tokens[:, num_obs_tokens:, :]
         missing_shape = p_miss.shape
-        d_sub = self.correction_scale * torch.tanh(
-            subject_missing.reshape(missing_shape)
-        )
-        d_task = self.correction_scale * torch.tanh(
-            task_missing.reshape(missing_shape)
-        )
+        d_sub = subject_missing.reshape(missing_shape)
+        d_task = task_missing.reshape(missing_shape)
         # import pdb;pdb.set_trace()
         h_pred_miss = p_miss + d_sub + d_task
         return {
