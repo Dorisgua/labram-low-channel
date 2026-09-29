@@ -117,6 +117,7 @@ class BCIIV2AMultiSessionLoader(Dataset):
         ):
             self.subject_indices[int(subject)].append(local_index)
             self.task_indices[int(task)].append(local_index)
+        self._preloaded_full = None
 
     def __len__(self):
         return len(self.files)
@@ -136,8 +137,7 @@ class BCIIV2AMultiSessionLoader(Dataset):
             return X / (scale + 1e-8)
         raise ValueError(f"Unsupported BCI-IV-2a normalization: {self.normalize_method}")
 
-    @lru_cache(maxsize=None)
-    def __getitem__(self, index):
+    def _load_full(self, index):
         record = self.files[index]
         file_path = record["file"]
         with open(file_path, "rb") as handle:
@@ -154,26 +154,54 @@ class BCIIV2AMultiSessionLoader(Dataset):
         if self.sampling_rate != self.default_rate:
             sample_count = int(X.shape[-1] * self.sampling_rate / self.default_rate)
             X = resample(X, sample_count, axis=-1)
-        x_full = self._normalize(X)
-        x_obs = x_full[self.observed_indices_in_full]
-        x = x_full[self.channel_indices]
-
         # Match AdaBrain: the pkl label is authoritative; JSON has a duplicate.
         Y = int(float(sample["Y"]))
+        return torch.as_tensor(self._normalize(X), dtype=torch.float32).contiguous(), Y
+
+    def preload_into_memory(self):
+        """Read and normalize each trial once before DataLoader workers start."""
+        if self._preloaded_full is not None:
+            return
+        first, first_label = self._load_full(0)
+        data = torch.empty((len(self.files), *first.shape), dtype=torch.float32)
+        data[0] = first
+        if first_label != int(self.labels[0]):
+            raise ValueError("BCI-IV-2a manifest/pickle label mismatch at index 0")
+        for index in range(1, len(self.files)):
+            full, label = self._load_full(index)
+            if full.shape != first.shape or label != int(self.labels[index]):
+                raise ValueError(f"BCI-IV-2a preloaded trial mismatch at index {index}")
+            data[index] = full
+        self._preloaded_full = data
+        print(f"Preloaded {len(self.files)} BCI-IV-2a trials into RAM: "
+              f"{data.numel() * data.element_size() / 1024**2:.1f} MiB")
+
+    def _format_item(self, x_full, Y, index):
+        x_obs = x_full[self.observed_indices_in_full]
+        x = x_full[self.channel_indices]
         subject = int(self.subject_values[index])
         task = Y
-        x_tensor = torch.as_tensor(x, dtype=torch.float32).contiguous()
         # Keep the BCI-IV-2a loader interface aligned with ERP CORE.  The
         # classification engines consume the first two fields; Dynamic Stage
         # 1 additionally consumes the observed/full signals and metadata.
         return (
-            x_tensor,
+            x.contiguous(),
             Y,
-            torch.as_tensor(x_obs, dtype=torch.float32).contiguous(),
-            torch.as_tensor(x_full, dtype=torch.float32).contiguous(),
+            x_obs.contiguous(),
+            x_full,
             subject,
             task,
         )
+
+    @lru_cache(maxsize=None)
+    def _get_disk_item(self, index):
+        full, label = self._load_full(index)
+        return self._format_item(full, label, index)
+
+    def __getitem__(self, index):
+        if self._preloaded_full is not None:
+            return self._format_item(self._preloaded_full[index], int(self.labels[index]), index)
+        return self._get_disk_item(index)
 
 
 def prepare_BCIIV2A_multisession_dataset(

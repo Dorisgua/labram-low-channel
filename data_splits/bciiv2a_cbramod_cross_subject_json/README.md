@@ -1,6 +1,6 @@
 # BCI-IV-2A CBraMod 跨被试划分（LaBraM D）
 
-本目录从相邻的 `LabraM-Git-Diff-disengle_3stage_changeronghe_deletep_bciiv2a` checkout 中经核对后复制；三份 JSON 保留原始 trial 文件的绝对路径。对应预处理后的 `processed_data/A01` 至 `A09` 文件在当前机器上存在。
+本目录从相邻的 `LabraM-Git-Diff-disengle_3stage_changeronghe_deletep_bciiv2a` checkout 中经核对后复制；三份 JSON 的 trial 路径已指向当前用户 SSD 上的 `BCI-IV-2A/processed_data/A01` 至 `A09`。三个 split 的 5184 个对应文件均存在且与原路径文件大小一致，首尾抽样文件的 SHA256 也一致。
 
 | split | 被试 | trial 数 |
 | --- | --- | ---: |
@@ -9,6 +9,8 @@
 | test | A08–A09 | 1152 |
 
 每名被试 576 个 trial，四分类各类数量相等。JSON 中的 mean/std 来自 train，被三个 split 共用。本实验是 13 个观测导联到 22 个完整导联，信号从 250 Hz 重采样到 200 Hz，长度为 `[13,800]` 与 `[22,800]`。训练集原型在 `docs/prototypes/01_bciiv2a22_cbramod_train_cnn_patch_embed_mean.pth`，其来源元数据记载 2880 个 train trial、每个 trial 4 个 patch，源 LaBraM checkpoint 与本仓库的 `checkpoints/labram-base.pth` SHA256 一致。
+
+此配置会在训练启动时把 train/val/test 的归一化完整信号预载入 CPU 内存（合计约 348 MiB）。DataLoader 和 Stage1 配对抽样随后都从内存读取；其他 BCI 数据配置不启用这一模式。已启动的进程不会因修改代码或 JSON 自动切换数据源。
 
 使用本仓库的 `dataset_maker/make_BCIIV2A.py --protocol cbramod` 可重新生成划分；使用 `docs/prototypes/01_generate_bciiv2a_cnn_patch_prototypes.py --protocol cbramod` 可重新生成训练集原型。生成脚本会写入目标文件，运行前可用 `--dry-run` 检查划分脚本。
 

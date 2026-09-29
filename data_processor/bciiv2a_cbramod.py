@@ -12,7 +12,8 @@ EXPECTED_SUBJECTS = {"train": set(range(5)), "val": {5, 6}, "test": {7, 8}}
 
 
 def prepare_BCIIV2A_cbramod_dataset(
-    root, sampling_rate=200, normalize_method="z_score", channel_names=None
+    root, sampling_rate=200, normalize_method="z_score", channel_names=None,
+    preload=True,
 ):
     """Return train, test, val with the same six-field sample format as BCI D."""
     root = Path(root)
@@ -44,4 +45,7 @@ def prepare_BCIIV2A_cbramod_dataset(
         print(f"BCI-IV-2A CBraMod {split}: {len(dataset)} trials, subjects {sorted(counts)}")
     if paths["train"] & paths["val"] or paths["train"] & paths["test"] or paths["val"] & paths["test"]:
         raise ValueError("CBraMod split manifests overlap")
+    if preload:
+        for dataset in datasets.values():
+            dataset.preload_into_memory()
     return datasets["train"], datasets["test"], datasets["val"]

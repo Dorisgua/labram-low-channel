@@ -40,6 +40,8 @@ def parse_args():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--d-pca-dim", type=int, default=50)
+    parser.add_argument("--render-only", action="store_true",
+                        help="Redraw the four-column figure from saved coordinates")
     args = parser.parse_args()
     if args.max_samples < 32 or args.max_iter < 250:
         parser.error("max-samples must be >=32 and max-iter must be >=250")
@@ -52,13 +54,15 @@ def main():
     args = parse_args()
     args.checkpoint = args.checkpoint.resolve()
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    from plot_disentanglement_four_column import render_rows
+    row_label = "12 real -> 16 missing positions"
+    if args.render_only:
+        print(render_rows([(row_label, args.output_dir)], args.output_dir,
+                          title="ERP-Core Dynamic Stage1 | d_sub / d_task"))
+        return
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         os.environ[name] = str(args.threads)
 
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.lines import Line2D
     import numpy as np
     import torch
     from sklearn.decomposition import PCA
@@ -160,8 +164,9 @@ def main():
         "note": (
             "Dynamic Stage1 accepts 12 observed channels and predicts 16 missing "
             "positions; unlike the three-stage reference, it has no matched full28 "
-            "Corrector forward. z is pre-tanh missing-token mean; d is flattened "
-            "0.02*tanh correction."
+            "Corrector forward. z is the mean over missing positions; "
+            "d is the raw branch correction. The current forward has no tanh "
+            "or correction_scale multiplication."
         ),
     }
     coordinates = {}
@@ -192,52 +197,8 @@ def main():
             json.dumps(metadata, indent=2, default=str)
         )
 
-    subject_ids = sorted(np.unique(subjects))
-    subject_colors = dict(zip(
-        subject_ids, plt.get_cmap("nipy_spectral")(np.linspace(0, 1, len(subject_ids)))
-    ))
-    task_colors = dict(zip(
-        sorted(np.unique(tasks)), plt.get_cmap("tab20")(np.linspace(0, 1, 12))
-    ))
-    subject_handles = [
-        Line2D([], [], marker="o", linestyle="", color=subject_colors[v], label=f"Subject {v}")
-        for v in subject_ids
-    ]
-    task_handles = [
-        Line2D([], [], marker="o", linestyle="", color=task_colors[v], label=TASK_NAMES[v])
-        for v in sorted(np.unique(tasks))
-    ]
-    fig, axes = plt.subplots(2, 4, figsize=(24, 10))
-    for row, kind in enumerate(("z", "d")):
-        for axis, (branch, label_name) in zip(
-            axes[row], (("sub", "subject"), ("sub", "task"),
-                        ("task", "task"), ("task", "subject"))
-        ):
-            key = f"{kind}_{branch}"
-            labels = subjects if label_name == "subject" else tasks
-            colors = subject_colors if label_name == "subject" else task_colors
-            xy = coordinates[key]
-            axis.scatter(
-                xy[:, 0], xy[:, 1], c=[colors[int(v)] for v in labels],
-                s=3, alpha=0.65, linewidths=0, rasterized=True,
-            )
-            axis.set_title(f"{key} ({features[key].shape[1]}D), by {label_name}")
-            axis.set_xticks([])
-            axis.set_yticks([])
-        axes[row, 0].set_ylabel(
-            "pre-tanh z (mean over missing positions)" if kind == "z"
-            else f"actual d = {train_args.correction_scale} * tanh(raw)"
-        )
-    fig.suptitle(
-        "ERP-Core Dynamic Stage1 checkpoint-best | 12 real -> 16 missing | "
-        f"Test n={sample_count}"
-    )
-    fig.legend(handles=subject_handles, title="Subject", loc="upper right", bbox_to_anchor=(0.998, 0.88), fontsize=8)
-    fig.legend(handles=task_handles, title="ERP task", loc="lower right", bbox_to_anchor=(0.998, 0.08), fontsize=8)
-    fig.subplots_adjust(left=0.04, right=0.84, bottom=0.06, top=0.90, wspace=0.10, hspace=0.22)
-    fig.savefig(args.output_dir / "comparison_z_d_tsne.png", dpi=180)
-    fig.savefig(args.output_dir / "comparison_z_d_tsne.pdf", dpi=180)
-    plt.close(fig)
+    render_rows([(row_label, args.output_dir)], args.output_dir,
+                title=f"ERP-Core Dynamic Stage1 checkpoint-best | Test n={sample_count}")
     print(f"Done: {args.output_dir}", flush=True)
 
 
