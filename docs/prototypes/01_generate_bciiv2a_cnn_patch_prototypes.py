@@ -19,6 +19,7 @@ from Channels_definition import BCIIV2A_22_CHANNELS  # noqa: E402
 from data_processor.bciiv2a import (  # noqa: E402
     prepare_BCIIV2A_multisession_dataset,
 )
+from data_processor.bciiv2a_cbramod import prepare_BCIIV2A_cbramod_dataset  # noqa: E402
 
 
 BCIIV2A_ROOT = (
@@ -32,7 +33,8 @@ def get_args():
     parser = argparse.ArgumentParser(
         "Generate BCI-IV-2a 22-channel CNN patch_embed prototypes"
     )
-    parser.add_argument("--data_root", default=BCIIV2A_ROOT, type=str)
+    parser.add_argument("--data_root", default=None, type=str)
+    parser.add_argument("--protocol", choices=("multisession", "cbramod"), default="multisession")
     parser.add_argument(
         "--finetune",
         default="./checkpoints/labram-base.pth",
@@ -41,7 +43,7 @@ def get_args():
     )
     parser.add_argument(
         "--output",
-        default="docs/prototypes/01_bciiv2a22_cnn_patch_embed_mean.pth",
+        default=None,
         type=str,
     )
     parser.add_argument("--model", default="labram_base_patch200_200", type=str)
@@ -107,9 +109,22 @@ def build_labram(args):
 @torch.no_grad()
 def main():
     args = get_args()
+    if args.data_root is None:
+        args.data_root = (
+            str(REPO_ROOT / "data_splits/bciiv2a_cbramod_cross_subject_json")
+            if args.protocol == "cbramod" else BCIIV2A_ROOT
+        )
+    if args.output is None:
+        args.output = (
+            "docs/prototypes/01_bciiv2a22_cbramod_train_cnn_patch_embed_mean.pth"
+            if args.protocol == "cbramod" else
+            "docs/prototypes/01_bciiv2a22_cnn_patch_embed_mean.pth"
+        )
     device = torch.device(args.device)
 
-    train_dataset, _, _ = prepare_BCIIV2A_multisession_dataset(
+    prepare_fn = (prepare_BCIIV2A_cbramod_dataset if args.protocol == "cbramod"
+                  else prepare_BCIIV2A_multisession_dataset)
+    train_dataset, _, _ = prepare_fn(
         args.data_root,
         sampling_rate=args.sampling_rate,
         normalize_method=args.norm_method,
@@ -177,6 +192,7 @@ def main():
         "input_chans_index": input_chans_index,
         "channel_input_chans_index": channel_input_chans_index,
         "source_dataset": "BCI-IV-2a train split",
+        "split_protocol": args.protocol,
         "prototype_type": "cnn_patch_embed_mean",
         "num_samples": len(train_dataset),
         "num_channels": len(ch_names),

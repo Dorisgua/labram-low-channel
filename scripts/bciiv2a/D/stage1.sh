@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
-export DATASET="bciiv2a"
+export DATASET="${DATASET:-bciiv2a}"
 export DATA_PATH="${DATA_PATH:-${REPO_DIR}/preprocessing/BCI-IV-2A/multi_subject_json}"
 export CHANNEL_SUBSET="bciiv2a13"
 export COMPLETION_SCOPE="bciiv2a13_with_bciiv2a22"

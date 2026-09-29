@@ -40,6 +40,7 @@ from scipy import interpolate
 # import modeling_finetune
 import modeling_dynamic_stage1
 from data_processor.bciiv2a import prepare_BCIIV2A_multisession_dataset
+from data_processor.bciiv2a_cbramod import prepare_BCIIV2A_cbramod_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
 from data_processor.physionet import prepare_PhysioNet_motor_imagery_dataset
 from data_processor.seed import prepare_SEED_cross_subject_dataset
@@ -368,6 +369,18 @@ DATASET_CONFIGS = {
             'normalize_method': 'norm_method',
         },
         # AdaBrain normalizes in the loader, so do not apply LaBraM's /100 again.
+        'input_scale': 1.0,
+        'num_t': 4,
+        'nb_classes': 4,
+        'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
+    },
+    'bciiv2a_cbramod': {
+        'root': str(Path(__file__).resolve().parent / 'data_splits/bciiv2a_cbramod_cross_subject_json'),
+        'prepare_fn': prepare_BCIIV2A_cbramod_dataset,
+        'ch_names': {'bciiv2a13': BCIIV2A_13_CHANNELS, 'bciiv2a22': BCIIV2A_22_CHANNELS},
+        'pass_channel_names': True,
+        'validate_loader_channel_names': True,
+        'prepare_kwargs_from_args': {'sampling_rate': 'sampling_rate', 'normalize_method': 'norm_method'},
         'input_scale': 1.0,
         'num_t': 4,
         'nb_classes': 4,

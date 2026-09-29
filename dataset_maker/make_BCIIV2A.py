@@ -49,7 +49,8 @@ def parse_args() -> argparse.Namespace:
         description="Create BCI-IV-2a multi-session train/val/test JSON manifests."
     )
     parser.add_argument("--input-root", type=Path, default=DEFAULT_INPUT_ROOT)
-    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument("--protocol", choices=("multisession", "cbramod"), default="multisession")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -96,7 +97,7 @@ def calculate_train_stats(records: list[dict]) -> dict:
     }
 
 
-def build_records(input_root: Path) -> dict[str, list[dict]]:
+def build_records(input_root: Path, protocol: str = "multisession") -> dict[str, list[dict]]:
     output = {name: [] for name in SPLITS}
     for subject_index in range(9):
         subject_id = subject_index + 1
@@ -115,11 +116,19 @@ def build_records(input_root: Path) -> dict[str, list[dict]]:
                 "file": str(path),
                 "label": label,
             }
-            for split, trial_range in SPLITS.items():
-                if trial in trial_range:
-                    output[split].append(record)
-                    break
-    expected_counts = {"train": 2592, "val": 1296, "test": 1296}
+            if protocol == "cbramod":
+                split = "train" if subject_index < 5 else "val" if subject_index < 7 else "test"
+                output[split].append(record)
+            else:
+                for split, trial_range in SPLITS.items():
+                    if trial in trial_range:
+                        output[split].append(record)
+                        break
+    expected_counts = (
+        {"train": 2880, "val": 1152, "test": 1152}
+        if protocol == "cbramod" else
+        {"train": 2592, "val": 1296, "test": 1296}
+    )
     for split, expected in expected_counts.items():
         if len(output[split]) != expected:
             raise ValueError(
@@ -143,11 +152,17 @@ def atomic_json_dump(payload: dict, destination: Path) -> None:
 def main() -> None:
     args = parse_args()
     input_root = args.input_root.resolve()
-    output_root = args.output_root.resolve()
+    output_root = (args.output_root or (
+        Path(__file__).resolve().parents[1] / "data_splits/bciiv2a_cbramod_cross_subject_json"
+        if args.protocol == "cbramod" else DEFAULT_OUTPUT_ROOT
+    )).resolve()
     if not input_root.is_dir():
         raise FileNotFoundError(f"BCI-IV-2a input root not found: {input_root}")
-    records = build_records(input_root)
+    records = build_records(input_root, args.protocol)
     dataset_info = calculate_train_stats(records["train"])
+    if args.protocol == "cbramod":
+        dataset_info["split_source"] = "CBraMod subject split"
+        dataset_info["split_subjects"] = {"train": [0, 1, 2, 3, 4], "val": [5, 6], "test": [7, 8]}
     payloads = {
         split: {"dataset_info": dataset_info, "subject_data": split_records}
         for split, split_records in records.items()
