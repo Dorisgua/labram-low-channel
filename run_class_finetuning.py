@@ -906,6 +906,8 @@ def main(args, ds_init):
         model.real_input_chans_index = real_input_chans_index
 
     dynamic_stage2_scopes = {
+        "seedv23_with_seedv62",
+        "tuev13_with_tuev23",
         "bciiv2a13_with_bciiv2a22",
         "erpcore12_with_erpcore28",
         "erpcore14_with_erpcore28",

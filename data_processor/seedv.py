@@ -2,14 +2,14 @@
 
 import pickle
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from Channels_definition import SEEDV_62_CHANNELS
+from Channels_definition import SEEDV_23_CHANNELS, SEEDV_62_CHANNELS
 
 
 EXPECTED_SPLITS = {
@@ -21,6 +21,7 @@ EXPECTED_SAMPLE_SHAPE = (62, 200)
 EXPECTED_LABELS = {0, 1, 2, 3, 4}
 EXPECTED_SUBJECTS = set(range(1, 17))
 EXPECTED_SESSIONS = 47
+LABEL_BY_NAME = {"disgust": 0, "fear": 1, "sad": 2, "neutral": 3, "happy": 4}
 
 FILE_NAME_PATTERN = re.compile(
     r"^sub(?P<subject>\d+)_sess(?P<session>\d+)_trial(?P<trial>\d+)_"
@@ -31,11 +32,12 @@ FILE_NAME_PATTERN = re.compile(
 class SEEDVMotorEmotionDataset(Dataset):
     """Load one trial-based SEED-V split from preprocessed pickle windows."""
 
-    def __init__(self, root, split, channel_names=None):
+    def __init__(self, root, split, channel_names=None, dynamic_stage1=False):
         if split not in EXPECTED_SPLITS:
             raise ValueError(f"Unsupported SEED-V split: {split}")
 
         self.root = Path(root)
+        self.dynamic_stage1 = dynamic_stage1
         if not self.root.is_dir():
             raise FileNotFoundError(f"SEED-V root not found: {self.root}")
 
@@ -75,11 +77,21 @@ class SEEDVMotorEmotionDataset(Dataset):
             [self.manifest_channel_names.index(name) for name in self.channel_names],
             dtype=np.int64,
         )
+        self.full_channel_names = list(self.manifest_channel_names)
+        self.observed_indices_in_full = np.asarray(
+            [self.manifest_channel_names.index(name) for name in SEEDV_23_CHANNELS],
+            dtype=np.int64,
+        )
+        if dynamic_stage1 and self.channel_names != SEEDV_23_CHANNELS:
+            raise ValueError("SEED-V Dynamic Stage 1 requires the seedv23 channel layout")
+        self.subject_indices = defaultdict(list)
+        self.task_indices = defaultdict(list)
+        self.has_subject_ids = True
 
         subjects = set()
         sessions = set()
         label_name_counts = Counter()
-        for path in self.files:
+        for index, path in enumerate(self.files):
             match = FILE_NAME_PATTERN.match(path.name)
             if match is None:
                 raise ValueError(f"Unexpected SEED-V file name: {path.name}")
@@ -88,6 +100,12 @@ class SEEDVMotorEmotionDataset(Dataset):
             subjects.add(subject)
             sessions.add((subject, session))
             label_name_counts[match.group("label_name")] += 1
+            if dynamic_stage1:
+                label_name = match.group("label_name")
+                if label_name not in LABEL_BY_NAME:
+                    raise ValueError(f"Unknown SEED-V label name in {path.name}")
+                self.subject_indices[subject].append(index)
+                self.task_indices[LABEL_BY_NAME[label_name]].append(index)
 
         if subjects != EXPECTED_SUBJECTS:
             raise ValueError(
@@ -165,12 +183,19 @@ class SEEDVMotorEmotionDataset(Dataset):
 
     def __getitem__(self, index):
         path = self.files[int(index)]
-        signal, label = self._validate_record(path, record_index=int(index))
-        signal = np.ascontiguousarray(signal[self.channel_indices])
+        full_signal, label = self._validate_record(path, record_index=int(index))
+        if self.dynamic_stage1:
+            match = FILE_NAME_PATTERN.fullmatch(path.name)
+            if label != LABEL_BY_NAME[match.group("label_name")]:
+                raise ValueError(f"SEED-V filename/record label mismatch: {path.name}")
+            observed = torch.from_numpy(np.ascontiguousarray(full_signal[self.observed_indices_in_full]))
+            return (observed, label, observed, torch.from_numpy(full_signal.copy()),
+                    int(match.group("subject")), label)
+        signal = np.ascontiguousarray(full_signal[self.channel_indices])
         return torch.from_numpy(signal), label
 
 
-def prepare_SEEDV_dataset(root, channel_names=None):
+def prepare_SEEDV_dataset(root, channel_names=None, dynamic_stage1=False):
     """Build the established trial-based SEED-V train/test/validation splits."""
 
     datasets = {
@@ -178,6 +203,7 @@ def prepare_SEEDV_dataset(root, channel_names=None):
             root=root,
             split=split,
             channel_names=channel_names,
+            dynamic_stage1=dynamic_stage1,
         )
         for split in ("train", "val", "test")
     }

@@ -607,6 +607,8 @@ def get_dataset(args):
         kwarg: getattr(args, arg_name)
         for kwarg, arg_name in cfg.get('prepare_kwargs_from_args', {}).items()
     }
+    if args.dataset == 'SEEDV':
+        prepare_kwargs['dynamic_stage1'] = True
     root = args.data_path or cfg['root']
     if cfg.get('pass_channel_names', False):
         train_dataset, test_dataset, val_dataset = prepare_fn(

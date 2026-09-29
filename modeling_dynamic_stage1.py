@@ -664,6 +664,7 @@ class DynamicNeuralTransformer(nn.Module):
             # Dynamic Stage 2 不让缺失导联保持静态 prototype，而是使用
             # Stage 1 训练得到的 corrector 预测缺失通道 token。
             dynamic_completion_scopes = {
+                "seedv23_with_seedv62",
                 "bciiv2a13_with_bciiv2a22",
                 "erpcore12_with_erpcore28",
                 "erpcore14_with_erpcore28",
