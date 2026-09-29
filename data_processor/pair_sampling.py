@@ -22,6 +22,11 @@ def sample_cslpae_pair_batch(dataset, property_name, batch_size):
     if not values:
         raise ValueError(f"No values available for property: {property_name}")
 
+    # Bound pair forwards when a split has many subjects (TUEV has 232).
+    max_groups = max(int(batch_size) // 2, 1)
+    if len(values) > max_groups:
+        values = random.sample(values, max_groups)
+
     samples_per_repeat = len(values)
     repeats = max(int(batch_size) // (2 * samples_per_repeat), 1)
     left_indices = []

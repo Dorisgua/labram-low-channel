@@ -43,6 +43,7 @@ from data_processor.bciiv2a import prepare_BCIIV2A_multisession_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
 from data_processor.physionet import prepare_PhysioNet_motor_imagery_dataset
 from data_processor.seed import prepare_SEED_cross_subject_dataset
+from data_processor.tuev import prepare_TUEV_dynamic_dataset
 from data_processor.seedv import prepare_SEEDV_dataset
 from data_processor.zuo2025 import prepare_Zuo2025_cross_subject_dataset
 from data_processor.hgd import prepare_HGD_official_dataset
@@ -343,7 +344,7 @@ DATASET_CONFIGS = {
     },
     'TUEV': {
         'root': '/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/TUEZ/v2.0.1/processed_labram/processed',
-        'prepare_fn': utils.prepare_TUEV_dataset,
+        'prepare_fn': prepare_TUEV_dynamic_dataset,
         'ch_names': {
             'tuev13': TUEV_13_CHANNELS,
             'tuev23': TUEV_23_CHANNELS,

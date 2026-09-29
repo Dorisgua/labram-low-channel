@@ -306,9 +306,10 @@ def evaluate_dynamic_stage1(data_loader, model, device, header='Dynamic Stage 1:
 
         pair_batch_size = x_obs.shape[0]
         sub_pair_inputs = None
-        if (subject_summary_contra_weight > 0.0
-                or subject_correction_contra_weight > 0.0
-                or permute_sub_weight > 0.0):
+        if (getattr(data_loader.dataset, "has_subject_ids", True)
+                and (subject_summary_contra_weight > 0.0
+                     or subject_correction_contra_weight > 0.0
+                     or permute_sub_weight > 0.0)):
             sub_pair_inputs = _prepare_cslpae_pair(
                 data_loader.dataset, "subject", pair_batch_size, device, input_scale
             )
