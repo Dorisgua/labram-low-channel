@@ -239,6 +239,7 @@ def get_args():
                                  'physionet23_with_physionet64',
                                  'physionet32_with_physionet64',
                                  'seed23_with_seed62',
+                                 'shu13_with_shu32',
                                  'seedv23_with_seedv62', 'tuev23_with_seedv62_extra',
                                  'hgd20_with_hgd78', 'eegmat8_with_eegmat19',
                                  'siena13_with_siena29', 'attention10_with_attention26',
@@ -940,6 +941,8 @@ def main(args, ds_init):
         model.real_input_chans_index = real_input_chans_index
 
     dynamic_stage2_scopes = {
+        "seed23_with_seed62",
+        "shu13_with_shu32",
         "seedv23_with_seedv62",
         "tuev13_with_tuev23",
         "bciiv2a13_with_bciiv2a22",

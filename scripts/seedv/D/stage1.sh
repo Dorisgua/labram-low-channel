@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 export DATASET="SEEDV"
+export PRELOAD_DATA="${PRELOAD_DATA:-1}"
 export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/SEED_V/SEED-V-labram}"
 export CHANNEL_SUBSET="seedv23"
 export COMPLETION_SCOPE="seedv23_with_seedv62"

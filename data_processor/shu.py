@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pickle
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -92,6 +93,16 @@ class SHUCrossSubjectLoader(Dataset):
         for index, record in enumerate(self.files):
             self.subject_indices[int(record["subject_id"])].append(index)
             self.task_indices[int(record["label"])].append(index)
+        self.signals = None
+        self.labels = None
+        if os.environ.get("PRELOAD_DATA", "0") == "1":
+            self.signals = []
+            self.labels = []
+            for record in self.files:
+                with open(record["file"], "rb") as handle:
+                    sample = pickle.load(handle)
+                self.signals.append(np.asarray(sample["X"]).copy())
+                self.labels.append(int(float(sample["Y"])))
 
     def __len__(self):
         return len(self.files)
@@ -114,10 +125,14 @@ class SHUCrossSubjectLoader(Dataset):
     def __getitem__(self, index):
         record = self.files[index]
         file_path = record["file"]
-        with open(file_path, "rb") as handle:
-            sample = pickle.load(handle)
-
-        x = np.asarray(sample["X"])
+        if self.signals is None:
+            with open(file_path, "rb") as handle:
+                sample = pickle.load(handle)
+            x = np.asarray(sample["X"])
+            label = int(float(sample["Y"]))
+        else:
+            x = self.signals[index]
+            label = self.labels[index]
         if x.ndim != 2:
             raise ValueError(f"SHU sample must be [channels, time], got {x.shape}: {file_path}")
         if x.shape[0] != len(self.manifest_channel_names):
@@ -130,7 +145,6 @@ class SHUCrossSubjectLoader(Dataset):
             x = resample(x, sample_count, axis=-1)
         x = self._normalize(x)
 
-        label = int(float(sample["Y"]))
         if self.sampling_rate == 200 and x.shape != (len(SHU_32_CHANNELS), 800):
             raise ValueError(f"Unexpected SHU sample shape: {x.shape}: {file_path}")
         if not np.isfinite(x).all():

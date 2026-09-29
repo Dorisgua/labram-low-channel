@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import pickle
 import random
 import re
@@ -170,6 +171,13 @@ class SEEDCrossSubjectLoader(Dataset):
             subject = int(FILENAME_PATTERN.fullmatch(path.name).group("subject"))
             self.subject_indices[subject].append(index)
             self.task_indices[int(label)].append(index)
+        self._preloaded_full = None
+        if os.environ.get("PRELOAD_DATA", "0") == "1":
+            data = torch.empty((len(self.records), len(self.manifest_channel_names), 200), dtype=torch.float32)
+            for index in range(len(self.records)):
+                data[index].copy_(self[index][3])
+            self._preloaded_full = data
+            print(f"Preloaded {self.split} SEED samples into RAM: {len(self.records)}")
 
     def __len__(self):
         return len(self.records)
@@ -179,31 +187,34 @@ class SEEDCrossSubjectLoader(Dataset):
 
     def __getitem__(self, index):
         path, expected_label = self.records[index]
-        with path.open("rb") as handle:
-            sample = pickle.load(handle)
-        if not isinstance(sample, dict) or "X" not in sample or "Y" not in sample:
-            raise ValueError(f"Invalid SEED pickle schema: {path}")
+        if self._preloaded_full is None:
+            with path.open("rb") as handle:
+                sample = pickle.load(handle)
+            if not isinstance(sample, dict) or "X" not in sample or "Y" not in sample:
+                raise ValueError(f"Invalid SEED pickle schema: {path}")
 
-        x = np.asarray(sample["X"])
-        if x.shape != (len(self.manifest_channel_names), 200):
-            raise ValueError(
-                f"Unexpected SEED sample shape in {path}: got {x.shape}, "
-                f"expected ({len(self.manifest_channel_names)}, 200)"
-            )
-        label = int(sample["Y"])
-        if label != expected_label:
-            raise ValueError(
-                f"SEED label mismatch in {path}: pickle={label}, "
-                f"filename/trial={expected_label}"
-            )
-        x_full = np.ascontiguousarray(x, dtype=np.float32)
-        if not np.isfinite(x_full).all():
-            raise ValueError(f"SEED sample contains NaN or Inf: {path}")
-        x_input = np.ascontiguousarray(x_full[self.channel_indices])
-        x_obs = np.ascontiguousarray(x_full[self.observed_indices_in_full])
+            x = np.asarray(sample["X"])
+            if x.shape != (len(self.manifest_channel_names), 200):
+                raise ValueError(
+                    f"Unexpected SEED sample shape in {path}: got {x.shape}, "
+                    f"expected ({len(self.manifest_channel_names)}, 200)"
+                )
+            label = int(sample["Y"])
+            if label != expected_label:
+                raise ValueError(
+                    f"SEED label mismatch in {path}: pickle={label}, "
+                    f"filename/trial={expected_label}"
+                )
+            x_full = torch.from_numpy(np.ascontiguousarray(x, dtype=np.float32))
+            if not torch.isfinite(x_full).all():
+                raise ValueError(f"SEED sample contains NaN or Inf: {path}")
+        else:
+            x_full = self._preloaded_full[index]
+            label = expected_label
+        x_input = x_full[self.channel_indices].contiguous()
+        x_obs = x_full[self.observed_indices_in_full].contiguous()
         subject = int(FILENAME_PATTERN.fullmatch(path.name).group("subject"))
-        return (torch.from_numpy(x_input), label, torch.from_numpy(x_obs),
-                torch.from_numpy(x_full), subject, label)
+        return x_input, label, x_obs, x_full, subject, label
 
 
 def prepare_SEED_cross_subject_dataset(root, channel_names=None):

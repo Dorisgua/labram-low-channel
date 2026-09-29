@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-seedv_D_stage2}"
+export PRELOAD_DATA="${PRELOAD_DATA:-1}"
 export MODEL="${MODEL:-labram_dynamic_base_patch200_200}"
 export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/SEED_V/SEED-V-labram}"
 : "${STAGE1_CHECKPOINT:?Set STAGE1_CHECKPOINT to the Stage 1 checkpoint-best.pth for this run}"

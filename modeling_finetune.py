@@ -317,6 +317,11 @@ class NeuralTransformer(nn.Module):
             persistent=False,
         )
         self.register_buffer(
+            "shu32_channel_prototypes",
+            torch.zeros(32, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
             "tuev23_with_seedv62_extra_channel_prototypes",
             torch.zeros(70, embed_dim),
             persistent=False,
@@ -487,6 +492,8 @@ class NeuralTransformer(nn.Module):
             elif self.completion_scope == "seed23_with_seed62":
                 # SEED 36A: 23 real channels completed to the native 62-channel montage.
                 prototypes = self.seed62_channel_prototypes
+            elif self.completion_scope == "shu13_with_shu32":
+                prototypes = self.shu32_channel_prototypes
             elif self.completion_scope == "tuev23_with_seedv62_extra":
                 # prototypes: [70, embed_dim]
                 prototypes = self.tuev23_with_seedv62_extra_channel_prototypes

@@ -1,6 +1,7 @@
 """SEED-V loader for the preprocessed one-second LaBraM windows."""
 
 import pickle
+import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -118,6 +119,16 @@ class SEEDVMotorEmotionDataset(Dataset):
         self.label_name_counts = label_name_counts
 
         self._validate_record(self.files[0], record_index=0)
+        self.preload = os.environ.get("PRELOAD_DATA", "0") == "1"
+        self.signals = None
+        if self.preload:
+            self.signals = torch.empty((len(self.files), *EXPECTED_SAMPLE_SHAPE), dtype=torch.float32)
+            for index, path in enumerate(self.files):
+                signal, label = self._validate_record(path, record_index=index)
+                match = FILE_NAME_PATTERN.fullmatch(path.name)
+                if label != LABEL_BY_NAME[match.group("label_name")]:
+                    raise ValueError(f"SEED-V filename/record label mismatch: {path.name}")
+                self.signals[index].copy_(torch.from_numpy(signal))
 
     def __len__(self):
         return len(self.files)
@@ -178,14 +189,20 @@ class SEEDVMotorEmotionDataset(Dataset):
         return signal, label
 
     def __getitem__(self, index):
+        index = int(index)
         path = self.files[int(index)]
-        full_signal, label = self._validate_record(path, record_index=int(index))
         match = FILE_NAME_PATTERN.fullmatch(path.name)
-        if label != LABEL_BY_NAME[match.group("label_name")]:
-            raise ValueError(f"SEED-V filename/record label mismatch: {path.name}")
-        observed = torch.from_numpy(np.ascontiguousarray(full_signal[self.observed_indices_in_full]))
-        signal = np.ascontiguousarray(full_signal[self.channel_indices])
-        return (torch.from_numpy(signal), label, observed, torch.from_numpy(full_signal.copy()),
+        if self.signals is None:
+            full_signal, label = self._validate_record(path, record_index=index)
+            if label != LABEL_BY_NAME[match.group("label_name")]:
+                raise ValueError(f"SEED-V filename/record label mismatch: {path.name}")
+            full_signal = torch.from_numpy(full_signal.copy())
+        else:
+            full_signal = self.signals[index]
+            label = LABEL_BY_NAME[match.group("label_name")]
+        observed = full_signal[self.observed_indices_in_full].contiguous()
+        signal = full_signal[self.channel_indices].contiguous()
+        return (signal, label, observed, full_signal,
                 int(match.group("subject")), label)
 
 

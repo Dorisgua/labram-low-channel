@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from pathlib import Path
 import pickle
+import os
 
 import numpy as np
 import torch
@@ -50,6 +51,8 @@ class TUEVPklLoader(Dataset):
         self.subject_values = []
         self.subject_indices = defaultdict(list)
         self.task_indices = defaultdict(list)
+        self.preload = os.environ.get("PRELOAD_DATA", "0") == "1"
+        self.signals = torch.empty((len(self.files), len(TUEV_23_CHANNELS), 1000), dtype=torch.float32) if self.preload else None
         for index, filename in enumerate(self.files):
             with (self.root / filename).open("rb") as handle:
                 sample = pickle.load(handle)
@@ -59,6 +62,11 @@ class TUEVPklLoader(Dataset):
             label = int(raw_label) - 1
             if label not in range(6):
                 raise ValueError(f"Invalid TUEV label in {filename}: {label}")
+            if self.signals is not None:
+                signal = torch.as_tensor(np.asarray(sample["signal"]), dtype=torch.float32)
+                if signal.shape != (len(TUEV_23_CHANNELS), 1000) or not torch.isfinite(signal).all():
+                    raise ValueError(f"Invalid TUEV signal in {filename}: {tuple(signal.shape)}")
+                self.signals[index].copy_(signal)
             self.labels.append(label)
             self.subject_names.append(_subject_key(filename, split) if split != "test" else None)
             self.task_indices[label].append(index)
@@ -83,9 +91,12 @@ class TUEVPklLoader(Dataset):
 
     def __getitem__(self, index):
         filename = self.files[index]
-        with (self.root / filename).open("rb") as handle:
-            sample = pickle.load(handle)
-        x_full = torch.as_tensor(np.asarray(sample["signal"]), dtype=torch.float32)
+        if self.signals is None:
+            with (self.root / filename).open("rb") as handle:
+                sample = pickle.load(handle)
+            x_full = torch.as_tensor(np.asarray(sample["signal"]), dtype=torch.float32)
+        else:
+            x_full = self.signals[index]
         if x_full.shape != (len(TUEV_23_CHANNELS), 1000):
             raise ValueError(f"Unexpected TUEV signal shape in {filename}: {tuple(x_full.shape)}")
         if not torch.isfinite(x_full).all():

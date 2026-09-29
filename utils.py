@@ -752,18 +752,34 @@ class TUEVLoader(torch.utils.data.Dataset):
                 raise ValueError(f"Unknown TUEV channel names: {unknown}")
             channel_indices = [TUEV_23_CHANNELS.index(name) for name in channel_names]
         self.channel_indices = channel_indices
+        self.preload = os.environ.get("PRELOAD_DATA", "0") == "1"
+        self.signals = None
+        self.labels = None
+        if self.preload:
+            self.signals = []
+            self.labels = []
+            for filename in self.files:
+                with open(os.path.join(self.root, filename), "rb") as handle:
+                    sample = pickle.load(handle)
+                self.signals.append(torch.as_tensor(sample["signal"], dtype=torch.float32).clone())
+                self.labels.append(int(sample["label"][0] - 1))
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, index):
-        sample = pickle.load(open(os.path.join(self.root, self.files[index]), "rb"))
-        X = sample["signal"]
+        if self.signals is None:
+            with open(os.path.join(self.root, self.files[index]), "rb") as handle:
+                sample = pickle.load(handle)
+            X = sample["signal"]
+            Y = int(sample["label"][0] - 1)
+        else:
+            X = self.signals[index]
+            Y = self.labels[index]
         if self.channel_indices is not None:
             X = X[self.channel_indices]
         if self.sampling_rate != self.default_rate:
             X = resample(X, 5 * self.sampling_rate, axis=-1)
-        Y = int(sample["label"][0] - 1)
         X = torch.FloatTensor(X)
         return X, Y
 
