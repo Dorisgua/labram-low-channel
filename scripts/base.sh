@@ -103,7 +103,13 @@ CMD=(
     "${TORCHRUN}"
     --nnodes=1
     --nproc_per_node="${NPROC_PER_NODE}"
-    --master_port="${MASTER_PORT}"
+)
+if [[ "${MASTER_PORT}" == "auto" ]]; then
+    CMD+=(--rdzv-backend=c10d --rdzv-endpoint=localhost:0)
+else
+    CMD+=(--master_port="${MASTER_PORT}")
+fi
+CMD+=(
     "${TRAIN_ENTRYPOINT}"
     --output_dir "${OUTPUT_DIR}"
     --log_dir "${TB_LOG_DIR}"
