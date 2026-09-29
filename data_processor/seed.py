@@ -5,14 +5,14 @@ from __future__ import annotations
 import pickle
 import random
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from Channels_definition import SEED_62_CHANNELS
+from Channels_definition import SEED_23_CHANNELS, SEED_62_CHANNELS
 
 
 EXPECTED_SUBJECT_SAMPLES = 10137
@@ -160,6 +160,16 @@ class SEEDCrossSubjectLoader(Dataset):
             dtype=np.int64,
         )
         self.label_counts = Counter(label for _, label in self.records)
+        self.observed_indices_in_full = np.asarray(
+            [self.manifest_channel_names.index(name) for name in SEED_23_CHANNELS],
+            dtype=np.int64,
+        )
+        self.subject_indices = defaultdict(list)
+        self.task_indices = defaultdict(list)
+        for index, (path, label) in enumerate(self.records):
+            subject = int(FILENAME_PATTERN.fullmatch(path.name).group("subject"))
+            self.subject_indices[subject].append(index)
+            self.task_indices[int(label)].append(index)
 
     def __len__(self):
         return len(self.records)
@@ -186,10 +196,14 @@ class SEEDCrossSubjectLoader(Dataset):
                 f"SEED label mismatch in {path}: pickle={label}, "
                 f"filename/trial={expected_label}"
             )
-        x = np.ascontiguousarray(x[self.channel_indices], dtype=np.float32)
-        if not np.isfinite(x).all():
+        x_full = np.ascontiguousarray(x, dtype=np.float32)
+        if not np.isfinite(x_full).all():
             raise ValueError(f"SEED sample contains NaN or Inf: {path}")
-        return torch.from_numpy(x), label
+        x_input = np.ascontiguousarray(x_full[self.channel_indices])
+        x_obs = np.ascontiguousarray(x_full[self.observed_indices_in_full])
+        subject = int(FILENAME_PATTERN.fullmatch(path.name).group("subject"))
+        return (torch.from_numpy(x_input), label, torch.from_numpy(x_obs),
+                torch.from_numpy(x_full), subject, label)
 
 
 def prepare_SEED_cross_subject_dataset(root, channel_names=None):
@@ -200,7 +214,7 @@ def prepare_SEED_cross_subject_dataset(root, channel_names=None):
     records = _make_cross_subject_records(subject_files)
     datasets = {
         split: SEEDCrossSubjectLoader(
-            records[split], split=split, channel_names=channel_names
+            records[split], split=split, channel_names=channel_names,
         )
         for split in ("train", "val", "test")
     }

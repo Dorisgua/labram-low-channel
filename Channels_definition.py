@@ -264,6 +264,13 @@ SEEDV_23_CHANNELS = [
 # layout rather than defining a second ordering for the same electrodes.
 SEED_23_CHANNELS = list(SEEDV_23_CHANNELS)
 
+# SHU motor imagery: 13 observed electrodes within the 32-channel layout.
+SHU_32_CHANNELS = list(FACED_32_CHANNELS)
+SHU_13_CHANNELS = [
+    "FZ", "FC1", "FC2", "FC5", "FC6", "CZ", "C3",
+    "C4", "CP1", "CP2", "CP5", "CP6", "PZ",
+]
+
 SEED_MASKED_39_CHANNELS = [
     channel for channel in SEED_62_CHANNELS
     if channel not in SEED_23_CHANNELS

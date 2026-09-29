@@ -38,6 +38,7 @@ from data_processor.bciiv2a_cbramod import prepare_BCIIV2A_cbramod_dataset
 from data_processor.eegmat import prepare_EEGMAT_cross_subject_dataset
 from data_processor.physionet import prepare_PhysioNet_motor_imagery_dataset
 from data_processor.seed import prepare_SEED_cross_subject_dataset
+from data_processor.shu import prepare_SHU_cross_subject_dataset
 from data_processor.seedv import prepare_SEEDV_dataset
 from data_processor.zuo2025 import prepare_Zuo2025_cross_subject_dataset
 from data_processor.hgd import prepare_HGD_official_dataset
@@ -62,6 +63,8 @@ from Channels_definition import (
     PHYSIONET_64_CHANNELS,
     SEED_23_CHANNELS,
     SEED_62_CHANNELS,
+    SHU_13_CHANNELS,
+    SHU_32_CHANNELS,
     SEEDV_23_CHANNELS,
     SEEDV_62_CHANNELS,
     TUEV_13_CHANNELS,
@@ -388,6 +391,21 @@ DATASET_CONFIGS = {
         'nb_classes': 3,
         'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
     },
+    'SHU': {
+        'root': '/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-test/AdaBrain-Bench-main_film/preprocessing/SHU/cross_subject_json',
+        'prepare_fn': prepare_SHU_cross_subject_dataset,
+        'ch_names': {'shu13': SHU_13_CHANNELS, 'shu32': SHU_32_CHANNELS},
+        'pass_channel_names': True,
+        'validate_loader_channel_names': True,
+        'prepare_kwargs_from_args': {
+            'sampling_rate': 'sampling_rate',
+            'normalize_method': 'norm_method',
+        },
+        'input_scale': 1.0,
+        'num_t': 4,
+        'nb_classes': 2,
+        'metrics': ["accuracy", "balanced_accuracy", "cohen_kappa", "f1_weighted"],
+    },
     'SEEDV': {
         'root': '/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/SEED_V/SEED-V-labram',
         'prepare_fn': prepare_SEEDV_dataset,
@@ -632,6 +650,7 @@ def _validate_completion_prototype(args, ch_names, target_ch_names, target_input
         "physionet23_with_physionet64": PHYSIONET_64_CHANNELS,
         "physionet32_with_physionet64": PHYSIONET_64_CHANNELS,
         "seed23_with_seed62": SEED_62_CHANNELS,
+        "shu13_with_shu32": SHU_32_CHANNELS,
         "seedv23_with_seedv62": SEEDV_62_CHANNELS,
         "tuev23_with_seedv62_extra": TUEV23_SEEDV62_EXTRA_CHANNELS,
         "hgd20_with_hgd78": HGD_78_CHANNELS,
@@ -895,6 +914,8 @@ def main(args, ds_init):
             model.physionet64_channel_prototypes.copy_(prototypes)
         elif args.completion_scope == "seed23_with_seed62":
             model.seed62_channel_prototypes.copy_(prototypes)
+        elif args.completion_scope == "shu13_with_shu32":
+            model.shu32_channel_prototypes.copy_(prototypes)
         elif args.completion_scope == "seedv23_with_seedv62":
             model.seedv62_channel_prototypes.copy_(prototypes)
         elif args.completion_scope == "tuev23_with_seedv62_extra":

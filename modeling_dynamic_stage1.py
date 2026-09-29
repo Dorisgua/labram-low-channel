@@ -318,6 +318,11 @@ class DynamicNeuralTransformer(nn.Module):
             persistent=False,
         )
         self.register_buffer(
+            "shu32_channel_prototypes",
+            torch.zeros(32, embed_dim),
+            persistent=False,
+        )
+        self.register_buffer(
             "tuev23_with_seedv62_extra_channel_prototypes",
             torch.zeros(70, embed_dim),
             persistent=False,
@@ -473,6 +478,7 @@ class DynamicNeuralTransformer(nn.Module):
             "physionet32_with_physionet64": self.physionet64_channel_prototypes,
             "seedv23_with_seedv62": self.seedv62_channel_prototypes,
             "seed23_with_seed62": self.seed62_channel_prototypes,
+            "shu13_with_shu32": self.shu32_channel_prototypes,
             "tuev23_with_seedv62_extra": self.tuev23_with_seedv62_extra_channel_prototypes,
             "hgd20_with_hgd78": self.hgd78_channel_prototypes,
             "eegmat8_with_eegmat19": self.eegmat19_channel_prototypes,
@@ -665,6 +671,8 @@ class DynamicNeuralTransformer(nn.Module):
             # Stage 1 训练得到的 corrector 预测缺失通道 token。
             dynamic_completion_scopes = {
                 "seedv23_with_seedv62",
+                "seed23_with_seed62",
+                "shu13_with_shu32",
                 "bciiv2a13_with_bciiv2a22",
                 "erpcore12_with_erpcore28",
                 "erpcore14_with_erpcore28",
