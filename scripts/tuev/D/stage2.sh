@@ -23,7 +23,7 @@ export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/protot
 export CLASSIFIER_MODE="adabrain_all_token"
 export CLASSIFIER_TOKEN_SCOPE="real"
 export FREEZE_CNN="1"
-export BEST_METRIC="${BEST_METRIC:-cohen_kappa}"
+export BEST_METRIC="${BEST_METRIC:-balanced_accuracy}"
 
 export BATCH_SIZE="${BATCH_SIZE:-64}"
 export EPOCHS="${EPOCHS:-30}"

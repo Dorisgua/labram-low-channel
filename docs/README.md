@@ -102,16 +102,18 @@ LR 不同，因此分成两行。
 - `△`：Test Acc 和 Test BAcc 中只有一个满足该条件。
 - `❌`：已经完成对应实验，但 Test Acc 和 Test BAcc 均不满足该条件。
 - `—`：尚未完成对应实验，无法判断。
+- 本表仅纳入当前批次结果；早期实验不参与本表判定，缺少当前批次结果时记为 `—`。
 - 单元格内的数值均按 `Test Acc；Test BAcc` 顺序列出；`O/A/N` 或 `A/N` 表示对应实验的数值顺序。
 
 | 数据集 | `O > A > N`（均 freeze CNN） | `A > N`（两者均 freeze CNN） | `A > N`（A freeze、N finetune CNN） | O（full finetune）效果 | `D > A` | 参考论文与文章效果 |
 |---|---|---|---|---|---|---|
-| BCI-IV-2a (multi session) | ✅<br>Acc O/A/N：55.48% > 54.71% > 52.70%<br>BAcc O/A/N：55.48% > 54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.70%<br>BAcc A/N：54.71% > 52.70% | ✅<br>Acc A/N：54.71% > 52.39%<br>BAcc A/N：54.71% > 52.39% | Test Acc：58.87%<br>Test BAcc：58.87% | —<br>D 脚本已加入，尚未完成实验 | AdaBrain<br>Test BAcc：60.75% |
-| ERP-Core | △<br>Acc O/A/N：57.60% / 61.38% / 60.59%<br>BAcc O/A/N：44.36% > 40.29% > 39.73% | ✅<br>Acc A/N：61.38% > 60.59%<br>BAcc A/N：40.29% > 39.73% | ❌<br>Acc A/N：61.38% < 64.42%<br>BAcc A/N：40.29% < 45.42% | Test Acc：64.61%<br>Test BAcc：48.91% | ❌<br>Acc D/A：54.66% < 61.38%<br>BAcc D/A：39.61% < 40.29% | CSLP<br>Test Acc：48.48±0.34%  |
-| TUEV | ❌<br>Acc O/A/N：71.64% / 71.58% / 74.19%<br>BAcc O/A/N：53.27% / 54.37% / 61.67% | ❌<br>Acc A/N：71.58% < 74.19%<br>BAcc A/N：54.37% < 61.67% | ❌<br>Acc A/N：71.58% < 74.63%<br>BAcc A/N：54.37% < 60.47% | Test Acc：74.19%<br>Test BAcc：61.92% | —<br>尚未进行 D 实验 | LaBraM<br>Test BAcc：64.09 ± 0.65 |
+| BCI-IV-2a (CBraMod) | ✅<br>Acc O/A/N：47.92% > 47.40% > 46.35%<br>BAcc O/A/N：47.92% > 47.40% > 46.35% | ✅<br>Acc A/N：47.40% > 46.35%<br>BAcc A/N：47.40% > 46.35% | —<br>本批次未核查 N full-finetune | —<br>本批次未核查 O full-finetune | ❌<br>Acc D/A：46.18% < 47.40%<br>BAcc D/A：46.18% < 47.40% | —<br>与 multi-session 协议分开报告 |
+| ERP-Core | △<br>Acc O/A/N：60.55% / 61.38% / 60.59%<br>BAcc O/A/N：45.39% > 40.29% > 39.73% | ✅<br>Acc A/N：61.38% > 60.59%<br>BAcc A/N：40.29% > 39.73% | —<br>本批次暂无对应结果 | —<br>本批次暂无对应结果 | ❌<br>Acc D/A：56.85% < 61.38%<br>BAcc D/A：37.43% < 40.29% | CSLP<br>Test Acc：48.48±0.34% |
+| TUEV | ❌<br>Acc O/A/N：74.48% / 76.54% / 78.88%<br>BAcc O/A/N：58.20% / 55.73% / 62.79% | ❌<br>Acc A/N：76.54% < 78.88%<br>BAcc A/N：55.73% < 62.79% | —<br>本批次暂无对应结果 | —<br>本批次暂无对应结果 | △<br>Acc D/A：72.96% < 76.54%<br>BAcc D/A：57.32% > 55.73% | LaBraM<br>Test BAcc：64.09 ± 0.65 |
 | PhysioNet-32 | ✅<br>Acc O/A/N：62.86% > 54.36% > 53.62%<br>BAcc O/A/N：62.88% > 54.37% > 53.65% | ✅<br>Acc A/N：54.36% > 53.62%<br>BAcc A/N：54.37% > 53.65% | ❌<br>Acc A/N：54.36% < 55.31%<br>BAcc A/N：54.37% < 55.33% | Test Acc：63.07%<br>Test BAcc：63.09% | —<br>尚未进行 D 实验 | EEG-FM-Bench（修正）<br>Test BAcc：57.52 ± 0.27 |
-| SEED | ✅<br>Acc O/A/N：56.16% > 55.08% > 54.32%<br>BAcc O/A/N：55.84% > 54.60% > 53.90% | ✅<br>Acc A/N：55.08% > 54.32%<br>BAcc A/N：54.60% > 53.90% | ❌<br>Acc A/N：55.08% < 55.34%<br>BAcc A/N：54.60% < 54.84% | Test Acc：55.36%<br>Test BAcc：55.01% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：55.78 |
-| SEED-V | △<br>Acc O/A/N：42.25% / 38.86% / 38.93%<br>BAcc O/A/N：42.04% > 38.22% > 38.10% | △<br>Acc A/N：38.86% < 38.93%<br>BAcc A/N：38.22% > 38.10% | ❌<br>Acc A/N：38.86% < 39.05%<br>BAcc A/N：38.22% < 38.38% | Test Acc：41.94%<br>Test BAcc：41.51% | —<br>尚未进行 D 实验 | LaBraM、EEG-FM-Bench<br>Test Acc：40.95 ± 0.62 |
+| SEED | ❌<br>Acc O/A/N：54.02% / 55.00% / 55.59%<br>BAcc O/A/N：53.70% / 54.57% / 55.17% | ❌<br>Acc A/N：55.00% < 55.59%<br>BAcc A/N：54.57% < 55.17% | —<br>本批次暂无对应结果 | —<br>本批次暂无对应结果 | ✅<br>Acc D/A：55.29% > 55.00%<br>BAcc D/A：54.90% > 54.57% | AdaBrain<br>Test BAcc：55.78 |
+| SEED-V | ❌<br>Acc O/A/N：42.04% / 38.44% / 38.89%<br>BAcc O/A/N：41.93% / 37.80% / 38.20% | ❌<br>Acc A/N：38.44% < 38.89%<br>BAcc A/N：37.80% < 38.20% | —<br>本批次暂无对应结果 | —<br>本批次暂无对应结果 | ❌<br>Acc D/A：38.20% < 38.44%<br>BAcc D/A：37.31% < 37.80% | LaBraM、EEG-FM-Bench<br>Test Acc：40.95 ± 0.62 |
+| SHU | ❌<br>Acc O/A/N：57.91% / 54.87% / 56.46%<br>BAcc O/A/N：57.93% / 54.88% / 56.46% | ❌<br>Acc A/N：54.87% < 56.46%<br>BAcc A/N：54.88% < 56.46% | —<br>本批次未核查 N full-finetune | —<br>本批次未核查 O full-finetune | ✅<br>Acc D/A：56.10% > 54.87%<br>BAcc D/A：56.11% > 54.88% | — |
 | EEGMAT | ❌<br>Acc O/A/N：83.33% / 74.17% / 75.00%<br>BAcc O/A/N：83.33% / 74.17% / 75.00% | ❌<br>Acc A/N：74.17% < 75.00%<br>BAcc A/N：74.17% < 75.00% | ✅<br>Acc A/N：74.17% > 73.33%<br>BAcc A/N：74.17% > 73.33% | Test Acc：80.00%<br>Test BAcc：80.00% | —<br>尚未进行 D 实验 | AdaBrain<br>Test BAcc：85.83 |
 | HGD | ✅<br>Acc O/A/N：81.86% > 80.03% > 78.37%<br>BAcc O/A/N：81.86% > 80.02% > 78.37% | ✅<br>Acc A/N：80.03% > 78.37%<br>BAcc A/N：80.02% > 78.37% | ❌<br>Acc A/N：80.03% < 83.33%<br>BAcc A/N：80.02% < 83.33% | Test Acc：84.36%<br>Test BAcc：84.36% | —<br>尚未进行 D 实验 | Schirrmeister et al.<br>Test Acc：91.2 |
 | Siena | △<br>Acc O/A/N：97.93% > 97.55% > 97.42%<br>BAcc O/A/N：57.59% / 49.93% / 53.31% | △<br>Acc A/N：97.55% > 97.42%<br>BAcc A/N：49.93% < 53.31% | △<br>Acc A/N：97.55% > 97.36%<br>BAcc A/N：49.93% < 58.45% | Test Acc：93.56%<br>Test BAcc：82.92% | —<br>尚未进行 D 实验 | —<br>未提供对应文章结果 |
@@ -120,13 +122,29 @@ LR 不同，因此分成两行。
 | FACED | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 O full-finetune 新实验 | —<br>尚未进行 D 实验 | CBraMod<br>Test BAcc：52.73 ± 1.07 |
 | Zuo2025 | —<br>当前只有 O 新实验 | —<br>缺少 A/N freeze 对照 | —<br>缺少 A 与 N full-finetune 对照 | —<br>尚未进行 O full-finetune 新实验 | —<br>尚未进行 D 实验 | —<br>未提供对应文章结果 |
 
-ERP-Core 的 A/N/O 数值来自 `LaBraM-unified-AON/outputs/erpcore`：均为 seed 0，并按
-Val BAcc 选择 best checkpoint。D 数值来自当前 dynamic 仓库最新完成的
-`erp_core_D_stage2_seed1_20260831_032343`，同样按 Val BAcc 选择 best checkpoint。
-由于 A 与 D 的 seed 不一致，当前 `D > A` 只能作为已有结果对照；严格结论需要补跑
-D seed 0，或补跑 A seed 1 后进行 matching-seed 比较。
+ERP-Core、TUEV、SEED、SEED-V、SHU 的 freeze-CNN A/N/O 使用当前仓库
+`outputs/<dataset>/aon/seed0_20260930_000705_2308507/`，D 使用对应的无额外
+corrector 时间编码运行；实际均为 seed 0，分类训练 30 轮。SEED-V 按 Val Acc
+选模，其余按 Val BAcc。本表仍同时报告 Test Acc 和 Test BAcc。
 
+- ERP-Core D：`erp_core_D_stage2_seed0_20260929_113250`，Stage1 来源为
+  `seed0_20260929_102523_63633/checkpoint-best.pth`。
+- TUEV D：从逐 epoch 日志重取 Val BAcc 最佳 epoch 16；现有
+  `checkpoint-best.pth` 仍对应 Val Kappa 最佳 epoch 0，未单独保存 epoch 16 权重。
+- SEED D：采用最早完整运行 `seed0_20260929_172810_1061101`；另一 seed0
+  运行作为重复实验，不按测试成绩择优。
+- SHU D：采用 `seed0_20260929_181806_1239449`；目录名 seed1/seed2 的两次
+  运行实际也是 seed0，不能作为三 seed 统计。
+- BCI-IV-2a (CBraMod)：A/N/O 为 2026-10-08 的运行，D 为
+  `seed0_20260929_154546_823179`；分类均 50 轮，按 Val BAcc 选模。
+  本表仅保留 CBraMod 划分，不纳入早期 multi-session 结果。
 
+ERP-Core、TUEV、SEED、SEED-V 的早期 A freeze 与 N full-finetune 比较及
+O full-finetune 成绩已从本表移除；对应单元格记为 `—`，不作达成与否的判定。
+当前对照为单 seed 结果，不代表统计显著性；
+部分数据与初始化来源仍需进一步核查。详细结果和运行目录见 [answer.md](answer.md)，
+BCI CBraMod 命令和实验设置见 [bciiv2a.md](bciiv2a.md)。下文其他“新实验”表沿用
+此前批次；本次核查的 freeze-CNN 基线以 5.1 为准。
 
 以下比较均同时考察 **Test Acc** 和 **Test BAcc**。除第 5 节外，A、N、O 均指
 **freeze CNN**；涉及不同 seed 数量或不同 classifier 时会单独注明。
