@@ -49,12 +49,13 @@ D−A 为正表示动态补全优于静态补全。
 
 | 数据集 | best checkpoint 选择依据 | Batch size | LR | Classifier mode |
 |---|---|---:|---:|---|
-| BCI-IV-2a | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | ERP-Core | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | TUEV | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
-| PhysioNet | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | SEED | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | SEED-V | Val Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
+| SHU | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
+| BCI-IV-2A（CBraMod） | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
+| PhysioNet | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | EEGMAT | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | HGD | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | Siena | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
@@ -62,4 +63,6 @@ D−A 为正表示动态补全优于静态补全。
 | AAD | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | FACED | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
 | Zuo2025 | Val Balanced Accuracy | 64 | `5e-4` | `adabrain_all_token`，scope=`real` |
+
+以上为当前标准分类入口（A/O/N；有 D 的数据集同时适用于 D Stage2）的默认配置，环境变量可覆盖。Batch size 为每个进程的 batch size。D Stage1 按验证总损失选模，不使用本表分类指标；历史 TUEV D 曾按 Kappa 选模，当前结果已从日志按验证 BAcc 重新选取。
 
