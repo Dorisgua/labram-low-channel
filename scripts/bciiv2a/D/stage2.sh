@@ -17,7 +17,7 @@ export CHANNEL_SUBSET="bciiv2a13"
 export COMPLETION_SCOPE="bciiv2a13_with_bciiv2a22"
 export POOLING_SCOPE="high"
 export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/prototypes/01_bciiv2a22_cnn_patch_embed_mean.pth}"
-export CORRECTION_SCALE="${CORRECTION_SCALE:-0}"
+# export CORRECTION_SCALE="${CORRECTION_SCALE:-0}"
 
 export CLASSIFIER_MODE="adabrain_all_token"
 export CLASSIFIER_TOKEN_SCOPE="real"
@@ -28,7 +28,8 @@ export FREEZE_CNN="1"
 export EPOCHS="${EPOCHS:-50}"
 export WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
 # export SEED="${SEED:-0}"
-# export MASTER_PORT="${MASTER_PORT:-29563}"
+# Stage 2 是独立进程，不会继承 Stage 1 子进程里设置的自动端口。
+export MASTER_PORT="${MASTER_PORT:-auto}"
 
 # if [[ -n "${RUN_BACKGROUND+x}" && -z "${RUN_FOREGROUND+x}" ]]; then
 #     case "${RUN_BACKGROUND}" in

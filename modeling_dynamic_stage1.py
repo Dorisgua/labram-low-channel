@@ -382,6 +382,9 @@ class DynamicNeuralTransformer(nn.Module):
         # Dynamic Stage 1 直接作为 DynamicNeuralTransformer 的子模块，不再额外
         # 包装一个 DynamicModel。
         self.corrector = nn.ModuleDict({
+            # 每个时间片一个可学习的“位置标记”，与分类器的位置编码独立。
+            # 从 0 开始：旧 checkpoint 没有此参数时，仍保持原来的输出。
+            "time_embedding": nn.Embedding(16, embed_dim),
             "shared_encoder": make_corrector_encoder(),
             "subject_encoder": make_corrector_encoder(),
             "task_encoder": make_corrector_encoder(),
@@ -389,6 +392,7 @@ class DynamicNeuralTransformer(nn.Module):
             "subject_norm": nn.LayerNorm(embed_dim),
             "task_norm": nn.LayerNorm(embed_dim),
         })
+        nn.init.zeros_(self.corrector["time_embedding"].weight)
         # 保留 correction_scale 参数兼容旧调用；修正分支不再缩放。
 
         if self.pos_embed is not None:
@@ -509,8 +513,15 @@ class DynamicNeuralTransformer(nn.Module):
         p_obs = p_all.index_select(1, obs_indices)
         p_miss = p_all.index_select(1, miss_indices)
 
-        obs_tokens = h_obs.flatten(1, 2)
-        miss_tokens = p_miss.flatten(1, 2)
+        if num_t > self.corrector["time_embedding"].num_embeddings:
+            raise ValueError(f"Corrector supports at most 16 time patches, got {num_t}")
+        # [1, 1, 时间片数, 特征维度]：所有导联共享同一套时间位置标记。
+        time_pos = self.corrector["time_embedding"](
+            torch.arange(num_t, device=h_obs.device)
+        ).to(dtype=h_obs.dtype)[None, None, :, :]
+        # 只加到 corrector 输入；p_miss 和 CNN 重建目标本身不变。
+        obs_tokens = (h_obs + time_pos).flatten(1, 2)
+        miss_tokens = (p_miss + time_pos).flatten(1, 2)
 
         num_obs_tokens = obs_tokens.shape[1] #有多少个通道
         tokens = torch.cat((obs_tokens, miss_tokens), dim=1) # 直接拼接 观测导联 token + 缺失导联 prototype token

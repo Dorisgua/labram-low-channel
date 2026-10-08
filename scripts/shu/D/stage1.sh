@@ -7,6 +7,7 @@ REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 export DATASET="SHU"
 export PRELOAD_DATA="${PRELOAD_DATA:-1}"
+# export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-test/AdaBrain-Bench-main_film/preprocessing/SHU/cross_subject_json}"
 export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-test/AdaBrain-Bench-main_film/preprocessing/SHU/cross_subject_json}"
 export CHANNEL_SUBSET="shu13"
 export COMPLETION_SCOPE="shu13_with_shu32"
