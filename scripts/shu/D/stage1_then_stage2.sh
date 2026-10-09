@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
-SEED="${SEED:-2}"
+export SEED="${SEED:-0}"
 RUN_ROOT="${RUN_ROOT:-${REPO_DIR}/outputs/shu/D_pipeline/seed${SEED}_$(date +%Y%m%d_%H%M%S)_$$}"
 STAGE1_OUTPUT_DIR="${STAGE1_OUTPUT_DIR:-${RUN_ROOT}/stage1}"
 STAGE2_OUTPUT_DIR="${STAGE2_OUTPUT_DIR:-${RUN_ROOT}/stage2}"

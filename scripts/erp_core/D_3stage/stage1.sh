@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SHU disentanglement Stage 1: 13 observed -> 32 target channels, 4 patches/channel.
+# ERP-Core Stage 1: disentanglement for 12 -> 28 channel completion.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
-export DATASET="SHU"
-export PRELOAD_DATA="${PRELOAD_DATA:-1}"
-export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-test/AdaBrain-Bench-main_film/preprocessing/SHU/cross_subject_json}"
-export CHANNEL_SUBSET="shu13"
-export COMPLETION_SCOPE="shu13_with_shu32"
-export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/prototypes/01_shu32_cnn_patch_embed_mean.pth}"
+export DATASET="ERPCORE"
+export DATA_PATH="${DATA_PATH:-/inspire/hdd/project/sais-medical/public/share_medical/EEG/erp_core/data_preparation/simple_data.pt}"
+export CHANNEL_SUBSET="${CHANNEL_SUBSET:-erpcore12}"
+export COMPLETION_SCOPE="${COMPLETION_SCOPE:-erpcore12_with_erpcore28}"
+export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth}"
 export FINETUNE="${FINETUNE:-${REPO_DIR}/checkpoints/labram-base.pth}"
-export OUTPUT_DIR="${OUTPUT_DIR:-${REPO_DIR}/outputs/shu/D_3stage_stage1/seed${SEED:-0}_$(date +%Y%m%d_%H%M%S)_$$}"
+export OUTPUT_DIR="${OUTPUT_DIR:-${REPO_DIR}/outputs/erpcore/D_3stage_stage1/seed${SEED:-0}_$(date +%Y%m%d_%H%M%S)_$$}"
 
+# ERP CORE Dynamic Stage 1：参考 preexp16 的训练与 loss 配置。
 export BATCH_SIZE="${BATCH_SIZE:-64}"
 export EPOCHS="${EPOCHS:-50}"
 export LR="${LR:-5e-4}"
@@ -22,7 +22,7 @@ export WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
 export UPDATE_FREQ="${UPDATE_FREQ:-1}"
 export LAYER_DECAY="${LAYER_DECAY:-1.0}"
 export SAMPLING_RATE="${SAMPLING_RATE:-200}"
-export NORM_METHOD="${NORM_METHOD:-95}"
+export NORM_METHOD="${NORM_METHOD:-z_score}"
 
 export MISSING_WEIGHT="${MISSING_WEIGHT:-0.0}"
 export REG_WEIGHT="${REG_WEIGHT:-0.0}"
@@ -32,8 +32,10 @@ export SUBJECT_CORRECTION_CONTRA_WEIGHT="${SUBJECT_CORRECTION_CONTRA_WEIGHT:-50}
 export TASK_CORRECTION_CONTRA_WEIGHT="${TASK_CORRECTION_CONTRA_WEIGHT:-50}"
 export PERMUTE_SUB_WEIGHT="${PERMUTE_SUB_WEIGHT:-1.0}"
 export PERMUTE_TASK_WEIGHT="${PERMUTE_TASK_WEIGHT:-1.0}"
+# export CORRECTION_SCALE="${CORRECTION_SCALE:-0.02}"
 export SEED="${SEED:-0}"
 
-echo "SHU Stage 1 output: ${OUTPUT_DIR}"
-echo "SHU disentanglement checkpoint: ${OUTPUT_DIR%/}/checkpoint-best.pth"
+# Direct missing reconstruction is disabled; correction contrast and swap losses remain.
+echo "Stage 1 output: ${OUTPUT_DIR}"
+echo "Disentanglement checkpoint: ${OUTPUT_DIR%/}/checkpoint-best.pth"
 exec bash "${REPO_DIR}/scripts/bash_stage1.sh" "$@"

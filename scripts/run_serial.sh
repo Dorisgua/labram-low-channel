@@ -17,8 +17,13 @@ SCRIPTS=(
     "seed=1 bciiv2a/D_3stage/cbramod_stage1_then_stage2.sh"
     "seed=2 bciiv2a/D_3stage/cbramod_stage1_then_stage2.sh"
 
-    "seed=1 tuev/D/stage1_then_stage2_remake.sh"
-    "seed=1 tuev/N/freeze_cnn_remake.sh"
+    "seed=1 shu/D/stage1_then_stage2.sh"
+    "seed=2 shu/D/stage1_then_stage2.sh"
+
+    "seed=0 shu/D_3stage/stage1_then_stage2.sh"
+    "seed=1 shu/D_3stage/stage1_then_stage2.sh"
+    "seed=2 shu/D_3stage/stage1_then_stage2.sh"
+
     "seed=1 tuev/O/freeze_cnn_remake.sh"
     "seed=2 tuev/A/freeze_cnn_remake.sh"
     "seed=2 tuev/N/freeze_cnn_remake.sh"
