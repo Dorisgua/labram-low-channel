@@ -126,7 +126,7 @@ Stage2 的 `classifier_mode=adabrain_all_token`、`classifier_token_scope=real` 
 
 | 方法 | 缺失导联集合 | 评估划分 | 缺失特征 MSE | checkpoint / 运行目录 |
 |---|---|---|---:|---|
-| A：固定 Prototype | M16 | 完整 Test / Val | 待核实 | `docs/prototypes/01_erpcore28_cnn_patch_embed_mean.pth`；未找到同范围静态 MSE 汇总 |
+| A：固定 Prototype | M16 | 完整 Test（14,485）；Val（7,161） | Test 0.007600625；Val 0.008762095 | `outputs/erpcore/prototype_mse_baseline/metrics.json`；使用主 D 的冻结 CNN，固定 Prototype 直接填入缺失位置 |
 | 两阶段 D（主分类来源） | M16 | 完整 Test（14,485）；Val（7,161） | Test 0.008694414；Val 0.009664306 | `outputs/erpcore/erp_core_D_stage1/seed0_20260929_102523_63633/checkpoint-best.pth`；选中 epoch 15 |
 | 两阶段 D（关闭直接重建的诊断消融） | M16 | 完整 Test（14,485）；Val（7,161） | Test 0.256009557；Val 0.261097122 | `outputs/erpcore/erp_core_D_stage1/seed0_20260929_103212_81175/checkpoint-best.pth`；选中 epoch 11 |
 | 两阶段 D（仅重建） | M16 | 完整 Test（14,485）；Val（7,161） | Test 0.004044031；Val 0.004395205 | `outputs/erpcore/recon_only/seed0_20260929_233627_2214963/stage1/checkpoint-best.pth`；选中 epoch 49 |
@@ -139,7 +139,9 @@ Stage2 的 `classifier_mode=adabrain_all_token`、`classifier_token_scope=real` 
 
 在已核对的相同缺失范围下，三阶段重建×500 的 Test MSE 比两阶段主 D 低 0.001629966（18.75%），但分类 BAcc 为 37.27%，没有超过两阶段的 37.43%。三阶段×50000 比×500 的 MSE 低 0.003168001（44.84%），其 BAcc 39.54% 高于×500 的 37.27%；两者只是单 seed 权重探索，且×2500 的 MSE 更低但 BAcc 36.98% 低于×500，不能概括为 MSE 越低分类越好。×50000 也未超过同为 50 轮的 A（40.29%）。
 
-**静态补全证据限制：** 旧文档 `docs/尝试从12导联变成14导联看AND情况_备份.md` §0.2 报告 Worst 5% Train 子集的 C5/C6/P8/P7/PO7 上 Dynamic/Prototype MSE，如 C5 0.02319/0.02689；这不是完整 Test 的 M16 平均 MSE。相邻旧 dynamic 仓库 `test_c5_first_trial_by_subject/samples_and_metrics.csv` 也只比较每被试首个 C5 trial。可作为局部补得更像的示例，不能替代 A 的全范围基线，更不能和表 4.1 相减。
+**固定 Prototype 基线已补齐（2026-10-09）：** 使用 `tools/evaluate_erpcore_prototype_mse.py`，在主 D 的冻结 CNN 空间，以相同训练集 z-score、input_scale=1.0、M16 范围评估完整 Val/Test；CNN 前向使用 CUDA autocast，误差以 float32 计算、按样本数加权。结果及 checkpoint/Prototype 哈希保存于 `outputs/erpcore/prototype_mse_baseline/metrics.json`。三阶段×500 的 Test MSE 比固定 Prototype 低约 7.05%，×50000 低约 48.74%；两阶段主 D 反而比固定 Prototype 高约 14.39%。这些重建结果不等于分类优势。
+
+**历史局部材料：** 旧文档 `docs/尝试从12导联变成14导联看AND情况_备份.md` §0.2 报告 Worst 5% Train 子集的 C5/C6/P8/P7/PO7 上 Dynamic/Prototype MSE，如 C5 0.02319/0.02689；这不是完整 Test 的 M16 平均 MSE。相邻旧 dynamic 仓库 `test_c5_first_trial_by_subject/samples_and_metrics.csv` 也只比较每被试首个 C5 trial。可作为局部补得更像的示例，不能替代 A 的全范围基线，更不能和表 4.1 相减。
 
 ## 5. 两阶段解耦诊断
 
@@ -220,7 +222,7 @@ metadata 明确使用**同一个冻结 Stage2 checkpoint**与全部 14,485 个 T
 
 ### 7.2 缺失特征 MSE 是否下降
 
-第4节的同 M16、完整 Test 日志支持：三阶段配置的 MSE 可以低于当前两阶段主 D；增大重建权重总体降低此组配置的 MSE。但这同时改变了对比相对权重、全导联预训练和训练时长，不能归因于“三阶段”这个单一因素。A 完整 Test MSE 未核实，不能声称三阶段稳定优于固定 Prototype。
+第4节的同 M16、完整 Test 日志支持：三阶段配置的 MSE 可以低于当前两阶段主 D；增大重建权重总体降低此组配置的 MSE。但这同时改变了对比相对权重、全导联预训练和训练时长，不能归因于“三阶段”这个单一因素。固定 Prototype 完整 Test MSE 为 0.007600625，当前四组三阶段配置的 MSE 均更低；这仍是单 seed 配置对照，不能据此声称稳定分类优势。
 
 ### 7.3 下游分类是否提升
 
@@ -229,7 +231,7 @@ metadata 明确使用**同一个冻结 Stage2 checkpoint**与全部 14,485 个 T
 | 问题 | 已观察结果 | 解释假设 | 仍待验证 |
 |---|---|---|---|
 | 分支是否分开 | 部分局部结构与显著交叉信息并存 | 先全导联可能有助于形成结构 | 同协议 leakage、Stage1/2 前后探针与交换 |
-| 补全是否更像 | 三阶段若干配置 M16 MSE 更低 | 更强重建权重可能更重视拟合目标 | 固定 Prototype 完整同范围基线、同设置多 seed |
+| 补全是否更像 | 三阶段若干配置 M16 MSE 更低 | 更强重建权重可能更重视拟合目标 | 同设置多 seed（固定 Prototype 完整同范围基线已补齐） |
 | 分类是否更好 | 某些三阶段配置高于两阶段，仍低于50轮 A | 重建信息未必充分服务判别读出 | 分类轮数/初始化/冻结/权重完全一致的两阶段 vs 三阶段 |
 
 表 7.1 来源：表3、4、5以及三阶段诊断 metadata/图片；解释列不是已证实结论。
@@ -258,7 +260,7 @@ metadata 明确使用**同一个冻结 Stage2 checkpoint**与全部 14,485 个 T
 
 素材：表4.1删去无关行，保留两阶段主D与三阶段四配置；若放旧长尾图 `docs/26b857c9-7006-40bc-bda9-f95c6f3e1871.png`，必须标“历史12→28 Train诊断，非当前受控对照”。
 
-讲稿：“这里的误差是缺失 CNN 特征的 MSE，不是原始 EEG 波形误差。已有三阶段配置可以把同范围 MSE 降低，但分类没有同步单调提高；固定 Prototype 的完整测试 MSE 还需要核实，暂时不能给出统一的重建排序。”
+讲稿：“这里的误差是缺失 CNN 特征的 MSE，不是原始 EEG 波形误差。已有三阶段配置可以把同范围 MSE 降低，但分类没有同步单调提高；固定 Prototype 的完整测试 MSE 已补齐，为 0.007600625；当前三阶段四组均更低，但不能将重建排序等同于分类排序。”
 
 ### 第5页：解耦诊断：目标信息仍然交叉
 
@@ -282,7 +284,7 @@ metadata 明确使用**同一个冻结 Stage2 checkpoint**与全部 14,485 个 T
 
 素材：表3.2与表4.1同配置并排，表7.1作为备份。
 
-讲稿：“四组三阶段配置的 BAcc 在36.98%到39.54%之间，均未超过同为50轮的固定补全40.29%。下一步应先统一分类轮数、初始化、损失和seed，再补齐主 checkpoint 的探针、受控交换及固定 Prototype 完整 MSE，分别回答表征、重建和分类有没有改善。”
+讲稿：“四组三阶段配置的 BAcc 在36.98%到39.54%之间，均未超过同为50轮的固定补全40.29%。下一步应先统一分类轮数、初始化、损失和seed，再补齐主 checkpoint 的探针、受控交换及固定 Prototype 完整 MSE 对照，分别回答表征、重建和分类有没有改善。”
 
 ## 9. 来源、冲突与待核实清单
 
@@ -313,7 +315,7 @@ metadata 明确使用**同一个冻结 Stage2 checkpoint**与全部 14,485 个 T
 
 ### 9.3 待核实与需要补的证据
 
-- **固定Prototype完整MSE：** 需现成评估产物或后续另行授权的统一评估，给出同CNN、同M16、同归一化、完整Val/Test的MSE与checkpoint哈希；当前不填造数。
+- **固定Prototype完整MSE：** 已评估完整 Val/Test，结果与哈希见 `outputs/erpcore/prototype_mse_baseline/metrics.json`。
 - **主两阶段解耦证据：** 需 `102523_63633/checkpoint-best.pth` 的全/少导联配套特征、探针、泄漏、交换/去分支诊断。当前线性探针属于关闭重建消融。
 - **三阶段是否改善分支：** 需Stage1 best与Stage2 best同Test样本、共同M16范围的同协议probe；再与主两阶段对照。现有 full/few 图不能回答训练前后问题。
 - **探针协议：** 需生成 `linear_probe.csv` 的代码与标准化/正则/划分记录，明确是trial随机划分、session隔离还是其他协议；不要把probe seed当训练seed。
