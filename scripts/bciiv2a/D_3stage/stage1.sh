@@ -13,7 +13,7 @@ export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/protot
 export FINETUNE="${FINETUNE:-${REPO_DIR}/checkpoints/labram-base.pth}"
 export OUTPUT_DIR="${OUTPUT_DIR:-${REPO_DIR}/outputs/bciiv2a/bciiv2a_D_stage1}"
 
-# Match ERP-Core D Stage 1 loss defaults; BCI uses four temporal patches.
+# Stage 1: disentanglement only; BCI uses four temporal patches.
 export BATCH_SIZE="${BATCH_SIZE:-64}"
 export EPOCHS="${EPOCHS:-20}"
 export LR="${LR:-5e-4}"
@@ -24,7 +24,7 @@ export LAYER_DECAY="${LAYER_DECAY:-1.0}"
 export SAMPLING_RATE="${SAMPLING_RATE:-200}"
 export NORM_METHOD="${NORM_METHOD:-z_score}"
 
-export MISSING_WEIGHT="${MISSING_WEIGHT:-20.0}"
+export MISSING_WEIGHT="${MISSING_WEIGHT:-0.0}"
 export REG_WEIGHT="${REG_WEIGHT:-0.001}"
 export SUBJECT_SUMMARY_CONTRA_WEIGHT="${SUBJECT_SUMMARY_CONTRA_WEIGHT:-0.02}"
 export TASK_SUMMARY_CONTRA_WEIGHT="${TASK_SUMMARY_CONTRA_WEIGHT:-0.0}"

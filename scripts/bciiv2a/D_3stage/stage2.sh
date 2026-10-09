@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# BCI-IV-2a Dynamic Stage 2: load/freeze the Stage 1 corrector and train
+# BCI-IV-2a Dynamic Stage 3: load/freeze the Stage 1 corrector and train
 # the same freeze-CNN classification path used by the A/N/O comparison.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 # export DATA_PATH="${DATA_PATH:-${REPO_DIR}/preprocessing/BCI-IV-2A/multi_subject_json}"
-export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-bciiv2a_D_stage2}"
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-bciiv2a_D_3stage_stage3}"
 export MODEL="${MODEL:-labram_dynamic_base_patch200_200}"
 
-export STAGE1_CHECKPOINT="${STAGE1_CHECKPOINT:-${REPO_DIR}/outputs/bciiv2a/bciiv2a_D_stage1/checkpoint-best.pth}"
+: "${STAGE2_CHECKPOINT:?Set STAGE2_CHECKPOINT to the reconstruction checkpoint-best.pth}"
+export STAGE1_CHECKPOINT="${STAGE2_CHECKPOINT}"
 export FINETUNE="${FINETUNE:-${STAGE1_CHECKPOINT}}"
 
 export CHANNEL_SUBSET="bciiv2a13"
