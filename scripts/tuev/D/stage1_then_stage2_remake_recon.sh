@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 export SEED="${SEED:-0}"
-RUN_ROOT="${RUN_ROOT:-${REPO_DIR}/outputs/tuev/D_pipeline_remake/seed${SEED}_$(date +%Y%m%d_%H%M%S)_$$}"
+RUN_ROOT="${RUN_ROOT:-${REPO_DIR}/outputs/tuev/D_pipeline_remake_recon/seed${SEED}_$(date +%Y%m%d_%H%M%S)_$$}"
 STAGE1_OUTPUT_DIR="${STAGE1_OUTPUT_DIR:-${RUN_ROOT}/stage1}"
 STAGE2_OUTPUT_DIR="${STAGE2_OUTPUT_DIR:-${RUN_ROOT}/stage2}"
 STAGE1_CHECKPOINT="${STAGE1_OUTPUT_DIR%/}/checkpoint-best.pth"
@@ -22,7 +22,7 @@ echo "Stage 2 output: ${STAGE2_OUTPUT_DIR}"
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
     OUTPUT_DIR="${STAGE1_OUTPUT_DIR}" EPOCHS="${STAGE1_EPOCHS:-50}" RUN_FOREGROUND=1 \
-        bash "${SCRIPT_DIR}/stage1_remake.sh" "$@"
+        bash "${SCRIPT_DIR}/stage1_remake_recon.sh" "$@"
     echo "After Stage 1 succeeds, Stage 2 will load: ${STAGE1_CHECKPOINT}"
     echo "Stage 2 epochs: ${STAGE2_EPOCHS:-50}"
     exit 0
@@ -35,7 +35,7 @@ if [[ "${RUN_BACKGROUND:-1}" == "1" && "${PIPELINE_CHILD:-0}" != "1" ]]; then
     nohup setsid env PIPELINE_CHILD=1 RUN_BACKGROUND=0 \
         RUN_ROOT="${RUN_ROOT}" STAGE1_OUTPUT_DIR="${STAGE1_OUTPUT_DIR}" \
         STAGE2_OUTPUT_DIR="${STAGE2_OUTPUT_DIR}" \
-        bash "${SCRIPT_DIR}/stage1_then_stage2_remake.sh" "$@" > "${PIPELINE_LOG}" 2>&1 < /dev/null &
+        bash "${SCRIPT_DIR}/stage1_then_stage2_remake_recon.sh" "$@" > "${PIPELINE_LOG}" 2>&1 < /dev/null &
     echo "Started pipeline in background; PID: $!"
     echo "Log: ${PIPELINE_LOG}"
     exit 0
@@ -44,7 +44,7 @@ fi
 run_pipeline() {
     echo "Stage 1 started: $(date -Is)"
     OUTPUT_DIR="${STAGE1_OUTPUT_DIR}" EPOCHS="${STAGE1_EPOCHS:-50}" RUN_FOREGROUND=1 \
-        bash "${SCRIPT_DIR}/stage1_remake.sh" "$@"
+        bash "${SCRIPT_DIR}/stage1_remake_recon.sh" "$@"
 
     if [[ ! -s "${STAGE1_CHECKPOINT}" ]]; then
         echo "Missing Stage 1 best checkpoint: ${STAGE1_CHECKPOINT}" >&2
