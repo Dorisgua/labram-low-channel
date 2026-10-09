@@ -24,10 +24,11 @@ SCRIPTS=(
     "seed=1 shu/D_3stage/stage1_then_stage2.sh"
     "seed=2 shu/D_3stage/stage1_then_stage2.sh"
 
-    "seed=1 tuev/O/freeze_cnn_remake.sh"
-    "seed=2 tuev/A/freeze_cnn_remake.sh"
-    "seed=2 tuev/N/freeze_cnn_remake.sh"
-    "seed=2 tuev/O/freeze_cnn_remake.sh"
+    "seed=0 erp_core/D_3stage/stage1_then_stage2.sh"
+    "seed=1 erp_core/D_3stage/stage1_then_stage2.sh"
+    "seed=2 erp_core/D_3stage/stage1_then_stage2.sh"
+
+
     "seed=2 tuev/D/stage1_then_stage2_remake.sh"
 )
 # 不想跑某项，就删除或注释对应行。

@@ -27,8 +27,8 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
     OUTPUT_DIR="${STAGE1_OUTPUT_DIR}" EPOCHS="${STAGE1_EPOCHS:-50}" RUN_FOREGROUND=1 \
         bash "${SCRIPT_DIR}/stage1.sh" "$@"
     echo "After Stage 1 succeeds, Stage 2 will use: ${STAGE1_CHECKPOINT}"
-    echo "Stage 2 reconstruction epochs: ${STAGE2_EPOCHS:-50}"
-    echo "Stage 3 loads ${STAGE2_CHECKPOINT}; classification epochs: ${STAGE3_EPOCHS:-30}"
+    echo "Stage 2 reconstruction epochs: ${STAGE2_EPOCHS:-20}"
+    echo "Stage 3 loads ${STAGE2_CHECKPOINT}; classification epochs: ${STAGE3_EPOCHS:-50}"
     exit 0
 fi
 
@@ -89,12 +89,12 @@ run_pipeline() {
     run_stage 1 "${STAGE1_OUTPUT_DIR}" "${STAGE1_EPOCHS:-50}" \
         env OUTPUT_DIR="${STAGE1_OUTPUT_DIR}" EPOCHS="${STAGE1_EPOCHS:-50}" RUN_FOREGROUND=1 \
         bash "${SCRIPT_DIR}/stage1.sh" "$@" || return 1
-    run_stage 2 "${STAGE2_OUTPUT_DIR}" "${STAGE2_EPOCHS:-50}" \
-        env OUTPUT_DIR="${STAGE2_OUTPUT_DIR}" EPOCHS="${STAGE2_EPOCHS:-50}" RUN_FOREGROUND=1 \
+    run_stage 2 "${STAGE2_OUTPUT_DIR}" "${STAGE2_EPOCHS:-20}" \
+        env OUTPUT_DIR="${STAGE2_OUTPUT_DIR}" EPOCHS="${STAGE2_EPOCHS:-20}" RUN_FOREGROUND=1 \
         STAGE1_CHECKPOINT="${STAGE1_CHECKPOINT}" FINETUNE="${STAGE1_CHECKPOINT}" \
         bash "${SCRIPT_DIR}/stage1_2.sh" || return 1
-    run_stage 3 "${STAGE3_OUTPUT_DIR}" "${STAGE3_EPOCHS:-30}" \
-        env OUTPUT_DIR="${STAGE3_OUTPUT_DIR}" EPOCHS="${STAGE3_EPOCHS:-30}" RUN_FOREGROUND=1 \
+    run_stage 3 "${STAGE3_OUTPUT_DIR}" "${STAGE3_EPOCHS:-50}" \
+        env OUTPUT_DIR="${STAGE3_OUTPUT_DIR}" EPOCHS="${STAGE3_EPOCHS:-50}" RUN_FOREGROUND=1 \
         STAGE2_CHECKPOINT="${STAGE2_CHECKPOINT}" FINETUNE="${STAGE2_CHECKPOINT}" \
         bash "${SCRIPT_DIR}/stage2.sh" || return 1
     echo "All three stages completed"

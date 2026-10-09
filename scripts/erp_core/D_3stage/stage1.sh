@@ -28,8 +28,8 @@ export MISSING_WEIGHT="${MISSING_WEIGHT:-0.0}"
 export REG_WEIGHT="${REG_WEIGHT:-0.0}"
 export SUBJECT_SUMMARY_CONTRA_WEIGHT="${SUBJECT_SUMMARY_CONTRA_WEIGHT:-0.0}"
 export TASK_SUMMARY_CONTRA_WEIGHT="${TASK_SUMMARY_CONTRA_WEIGHT:-0.0}"
-export SUBJECT_CORRECTION_CONTRA_WEIGHT="${SUBJECT_CORRECTION_CONTRA_WEIGHT:-50}"
-export TASK_CORRECTION_CONTRA_WEIGHT="${TASK_CORRECTION_CONTRA_WEIGHT:-50}"
+export SUBJECT_CORRECTION_CONTRA_WEIGHT="${SUBJECT_CORRECTION_CONTRA_WEIGHT:-1}"
+export TASK_CORRECTION_CONTRA_WEIGHT="${TASK_CORRECTION_CONTRA_WEIGHT:-1}"
 export PERMUTE_SUB_WEIGHT="${PERMUTE_SUB_WEIGHT:-1.0}"
 export PERMUTE_TASK_WEIGHT="${PERMUTE_TASK_WEIGHT:-1.0}"
 # export CORRECTION_SCALE="${CORRECTION_SCALE:-0.02}"
@@ -38,4 +38,10 @@ export SEED="${SEED:-0}"
 # Direct missing reconstruction is disabled; correction contrast and swap losses remain.
 echo "Stage 1 output: ${OUTPUT_DIR}"
 echo "Disentanglement checkpoint: ${OUTPUT_DIR%/}/checkpoint-best.pth"
+# Historical 39.54% configuration: first train using all real channels.
+case "${FULLCHANNEL:-1}" in
+    1) set -- --fullchannel "$@" ;;
+    0) ;;
+    *) echo "FULLCHANNEL must be 0 or 1" >&2; exit 2 ;;
+esac
 exec bash "${REPO_DIR}/scripts/bash_stage1.sh" "$@"

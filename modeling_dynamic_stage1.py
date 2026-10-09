@@ -495,7 +495,7 @@ class DynamicNeuralTransformer(nn.Module):
                 f"Unsupported completion_scope: {self.completion_scope}"
             ) from error
 
-    def _encode_dynamic_tokens(self, h_obs):
+    def _encode_dynamic_tokens(self, h_obs, fullchannel=False):
         prototypes = self._completion_prototypes().to(
             device=h_obs.device,
             dtype=h_obs.dtype,
@@ -514,6 +514,14 @@ class DynamicNeuralTransformer(nn.Module):
 
         num_obs_tokens = obs_tokens.shape[1] #有多少个通道
         tokens = torch.cat((obs_tokens, miss_tokens), dim=1) # 直接拼接 观测导联 token + 缺失导联 prototype token
+
+        if fullchannel:
+            if h_obs.shape[1] != prototypes.shape[0]:
+                raise ValueError("Full-channel input must match the prototype channel count")
+            tokens = obs_tokens
+            num_obs_tokens = 0
+            p_miss = p_all
+            miss_indices = torch.arange(prototypes.shape[0], device=h_obs.device)
 
         shared_tokens = self.corrector["shared_norm"](
             self.corrector["shared_encoder"](tokens)
@@ -546,7 +554,10 @@ class DynamicNeuralTransformer(nn.Module):
         }
 
     def forward_stage1(self, x_obs, x_full):
-        outputs = self._encode_dynamic_tokens(self._patch_tokens(x_obs))
+        fullchannel = getattr(self, "fullchannel", False)
+        outputs = self._encode_dynamic_tokens(
+            self._patch_tokens(x_full if fullchannel else x_obs), fullchannel=fullchannel
+        )
         with torch.no_grad():#不希望梯度经过目标分支
             h_full = self._patch_tokens(x_full)
             # 只取缺失导联

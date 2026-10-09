@@ -264,6 +264,8 @@ def get_args():
                         help='path to channel prototype checkpoint')
     parser.add_argument('--freeze_cnn', action='store_true',
                         help='Freeze patch_embed/TemporalConv and train only transformer/head layers')
+    parser.add_argument('--fullchannel', action='store_true',
+                        help='train corrector on all real target channels')
     parser.add_argument('--missing_weight', default=1.0, type=float,
                         help='weight of missing-channel latent reconstruction loss')
     parser.add_argument('--reg_weight', default=0.01, type=float,
@@ -908,6 +910,8 @@ def main(args, ds_init):
 
         utils.load_state_dict(model, checkpoint_model, prefix=args.model_prefix)
 
+    model.fullchannel = args.fullchannel
+    print(f"Corrector input: {'full channels' if args.fullchannel else 'observed channels + missing prototypes'}")
     model.completion_scope = args.completion_scope
     model.pooling_scope = args.pooling_scope
 
