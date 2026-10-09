@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
+
+export DATASET="SHU"
+export PRELOAD_DATA="${PRELOAD_DATA:-1}"
+export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/eeg-test/AdaBrain-Bench-main_film/preprocessing/SHU/cross_subject_json}"
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-shu_D_stage2}"
+export MODEL="labram_dynamic_base_patch200_200"
+: "${STAGE1_CHECKPOINT:?Set STAGE1_CHECKPOINT to the Stage 1 checkpoint-best.pth for this run}"
+export FINETUNE="${FINETUNE:-${STAGE1_CHECKPOINT}}"
+export CHANNEL_SUBSET="shu13"
+export COMPLETION_SCOPE="shu13_with_shu32"
+export POOLING_SCOPE="high"
+export CHANNEL_PROTOTYPE_PATH="${CHANNEL_PROTOTYPE_PATH:-${REPO_DIR}/docs/prototypes/01_shu32_cnn_patch_embed_mean.pth}"
+export CLASSIFIER_MODE="adabrain_all_token"
+export CLASSIFIER_TOKEN_SCOPE="real"
+export FREEZE_CNN="1"
+export BEST_METRIC="${BEST_METRIC:-balanced_accuracy}"
+export BATCH_SIZE="${BATCH_SIZE:-64}"
+export EPOCHS="${EPOCHS:-30}"
+export WARMUP_EPOCHS="${WARMUP_EPOCHS:-5}"
+export NORM_METHOD="${NORM_METHOD:-95}"
+export SAMPLING_RATE="${SAMPLING_RATE:-200}"
+export SEED="${SEED:-0}"
+export MASTER_PORT="${MASTER_PORT:-auto}"
+
+exec bash "${REPO_DIR}/scripts/base.sh" --model_filter_name "" "$@"
