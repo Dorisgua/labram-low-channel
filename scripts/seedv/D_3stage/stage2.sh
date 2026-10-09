@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SEED-V Dynamic Stage 2: load Stage 1 corrector and train classifier.
+# SEED-V Stage 3: load the reconstruction corrector and train classifier.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
-export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-seedv_D_stage2}"
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-seedv_D_3stage_stage3}"
 export PRELOAD_DATA="${PRELOAD_DATA:-1}"
 export MODEL="${MODEL:-labram_dynamic_base_patch200_200}"
 export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/SEED_V/SEED-V-labram}"
-: "${STAGE1_CHECKPOINT:?Set STAGE1_CHECKPOINT to the Stage 1 checkpoint-best.pth for this run}"
+: "${STAGE2_CHECKPOINT:?Set STAGE2_CHECKPOINT to the reconstruction checkpoint-best.pth}"
+export STAGE1_CHECKPOINT="${STAGE2_CHECKPOINT}"
 export FINETUNE="${FINETUNE:-${STAGE1_CHECKPOINT}}"
 
 export CHANNEL_SUBSET="seedv23"
