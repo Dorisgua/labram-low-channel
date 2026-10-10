@@ -28,8 +28,9 @@ SCRIPTS=(
     "seed=1 erp_core/D_3stage/stage1_then_stage2.sh"
     "seed=2 erp_core/D_3stage/stage1_then_stage2.sh"
 
-
-    "seed=2 tuev/D/stage1_then_stage2_remake.sh"
+    "seed=0 tuev/D_remake_3stage/stage1_then_stage2_remake.sh"
+    "seed=1 tuev/D_remake_3stage/stage1_then_stage2_remake.sh"
+    "seed=2 tuev/D_remake_3stage/stage1_then_stage2_remake.sh"
 )
 # 不想跑某项，就删除或注释对应行。
 # ==============================================================

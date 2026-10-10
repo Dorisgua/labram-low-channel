@@ -6,12 +6,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
-export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-tuev_D_stage2_remake}"
+export OUTPUT_SCRIPT_NAME="${OUTPUT_SCRIPT_NAME:-tuev_D_remake_3stage_stage3}"
 export MODEL="${MODEL:-labram_dynamic_base_patch200_200}"
 
 export DATA_PATH="${DATA_PATH:-/inspire/ssd/tenant_predefaa-9a1b-4522-bb10-8850f313be13/global_user/7461-chenxinhe/TUEZ/v2.0.1/processed_labram/processed}"
-: "${STAGE1_CHECKPOINT:?Set STAGE1_CHECKPOINT to the remake Stage 1 checkpoint-best.pth}"
-export STAGE1_CHECKPOINT
+: "${STAGE2_CHECKPOINT:?Set STAGE2_CHECKPOINT to the reconstruction checkpoint-best.pth}"
+export STAGE1_CHECKPOINT="${STAGE2_CHECKPOINT}"
 export FINETUNE="${FINETUNE:-${STAGE1_CHECKPOINT}}"
 
 export CHANNEL_SUBSET="${CHANNEL_SUBSET:-tuev13}"
