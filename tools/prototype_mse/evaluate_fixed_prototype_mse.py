@@ -7,38 +7,45 @@ from pathlib import Path
 import sys
 import torch
 from torch.utils.data import DataLoader
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from Channels_definition import ERPCORE_12_CHANNELS
-from data_processor.erpcore import prepare_ERPCORE_pt_dataset
-from run_dynamic_stage1 import get_models
+from run_dynamic_stage1 import get_models, DATASET_CONFIGS, _validate_completion_prototype
 import utils
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--checkpoint', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--batch-size', type=int, default=128)
+p.add_argument('--split', choices=['val', 'test', 'both'], default='test')
+p.add_argument('--num-workers', type=int, default=4)
 a = p.parse_args()
 torch.set_num_threads(4)
 c = torch.load(a.checkpoint, map_location='cpu')
 args = c['args']
-train, test, val = prepare_ERPCORE_pt_dataset(args.data_path, sampling_rate=args.sampling_rate, normalize_method=args.norm_method, channel_names=ERPCORE_12_CHANNELS)
+config=DATASET_CONFIGS[args.dataset]
+channels=config['ch_names']
+if isinstance(channels,dict): channels=channels[args.channel_subset]
+kwargs={k:getattr(args,v) for k,v in config.get('prepare_kwargs_from_args',{}).items()}
+if config.get('pass_channel_names'): kwargs['channel_names']=channels
+train,test,val=config['prepare_fn'](args.data_path,**kwargs)
 del train
 model = get_models(args)
 model.load_state_dict(c['model'], strict=True)
 model.completion_scope = args.completion_scope
-model.real_input_chans_index = [int(i) for i in utils.get_input_chans(ERPCORE_12_CHANNELS)]
+model.real_input_chans_index = [int(i) for i in utils.get_input_chans(channels)]
 prototype = torch.load(args.channel_prototype_path, map_location='cpu')
 model.target_input_chans_index = [int(i) for i in prototype['input_chans_index']]
+_validate_completion_prototype(args, channels, prototype['ch_names'], model.target_input_chans_index, prototype['channel_prototypes'])
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device).eval().requires_grad_(False)
 _, missing = model._dynamic_channel_indices(device)
 pred = prototype['channel_prototypes'].to(device).index_select(0, missing)[None, :, None, :]
 result = {'reference_checkpoint': str(a.checkpoint.resolve()), 'prototype': args.channel_prototype_path, 'normalization': args.norm_method, 'input_scale': float(args.input_scale), 'missing_channels': [prototype['ch_names'][i] for i in missing.tolist()], 'precision': 'CUDA autocast (same as Stage1 evaluation); float32 squared error', 'splits': {}}
 for split, dataset in [('val',val),('test',test)]:
+    if a.split != 'both' and split != a.split: continue
     total, n = 0.0, 0
     with torch.inference_mode():
-        for batch in DataLoader(dataset,batch_size=a.batch_size,num_workers=0):
+        for batch in DataLoader(dataset,batch_size=a.batch_size,num_workers=a.num_workers):
             x=batch[3].to(device).float()*float(args.input_scale)
             x=x.reshape(x.shape[0],x.shape[1],-1,200)
             with torch.cuda.amp.autocast(enabled=device.type=='cuda'):

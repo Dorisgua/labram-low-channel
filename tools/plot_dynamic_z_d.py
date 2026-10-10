@@ -11,7 +11,44 @@ import sys
 
 EXPERIMENT = Path(__file__).resolve().parent
 ROOT = next(parent for parent in EXPERIMENT.parents if (parent / 'run_dynamic_stage1.py').is_file())
-CKPT = EXPERIMENT / 'checkpoint-best.pth'
+sys.path.insert(0, str(ROOT / 'tools'))
+
+def render_cache(directory):
+    import numpy as np
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    with (directory / 'sample_alignment.csv').open() as f:
+        rows = list(csv.DictReader(f))
+    subjects = np.asarray([int(row['subject']) for row in rows])
+    tasks = np.asarray([int(row['task']) for row in rows])
+    sub_colors = dict(zip(sorted(set(subjects)), plt.get_cmap('nipy_spectral')(np.linspace(0,1,len(set(subjects))))))
+    task_colors = dict(zip(sorted(set(tasks)), plt.get_cmap('tab20')(np.linspace(0,1,len(set(tasks))))))
+    metadata = json.loads((directory/'metadata.json').read_text()) if (directory/'metadata.json').exists() else {}
+    names = {}
+    if metadata.get('checkpoint_args',{}).get('dataset') == 'ERPCORE':
+        from plot_disentanglement_four_column import TASK_NAMES
+        names = TASK_NAMES
+    rendered = 0
+    for sub_path in sorted(directory.glob('*_sub_tsne.npy')):
+        task_path = sub_path.with_name(sub_path.name.replace('_sub_tsne.npy','_task_tsne.npy'))
+        if not task_path.exists(): continue
+        sub,task = np.load(sub_path),np.load(task_path)
+        if sub.shape != (len(rows),2) or task.shape != sub.shape:raise ValueError('Cached sample alignment mismatch')
+        fig,axes=plt.subplots(2,2,figsize=(18,12))
+        for ax,(xy,values,colors,title) in zip(axes.flat,[(sub,subjects,sub_colors,'sub by subject'),(sub,tasks,task_colors,'sub by task'),(task,tasks,task_colors,'task by task'),(task,subjects,sub_colors,'task by subject')]):
+            ax.scatter(xy[:,0],xy[:,1],c=[colors[v] for v in values],s=3,alpha=.65,linewidths=0)
+            ax.set_title(title);ax.set_xticks([]);ax.set_yticks([])
+        fig.legend(handles=[Line2D([],[],marker='o',linestyle='',color=task_colors[v],label=names.get(int(v),f'Task {v}')) for v in sorted(task_colors)],loc='lower right')
+        fig.legend(handles=[Line2D([],[],marker='o',linestyle='',color=sub_colors[v],label=f'Subject {v}') for v in sorted(sub_colors)],loc='upper right',fontsize=8)
+        fig.subplots_adjust(right=.82)
+        stem=sub_path.name.removesuffix('_sub_tsne.npy')+'_tsne_redraw'
+        for suffix in ('png','pdf'):fig.savefig(directory/f'{stem}.{suffix}',dpi=180)
+        plt.close(fig)
+        rendered += 1
+    if not rendered: raise ValueError('No paired sub/task t-SNE coordinates found')
+    print(f'Redrawn cached coordinates: {directory}')
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -19,7 +56,7 @@ def main():
     p.add_argument('--max-samples', type=int, default=2000, help='Number of random samples; ignored in all mode')
     p.add_argument('--sample-seed', type=int, default=42)
     p.add_argument('--split', choices=['test', 'train'], default='test')
-    p.add_argument('--views', choices=['full', 'full32', 'all'], default='all',
+    p.add_argument('--views', choices=['full', 'full32', 'few', 'all'], default='all',
                    help='full: full-input all positions only; all: also compare full/few input at missing positions')
     p.add_argument('--max-iter', type=int, default=1000)
     p.add_argument('--batch-size', type=int, default=128)
@@ -30,7 +67,12 @@ def main():
     p.add_argument('--checkpoint', type=Path, required=True)
     p.add_argument('--output-dir', type=Path, default=None,
                    help='Default: checkpoint directory / tsne_<split>_<sample-mode>_<views>')
+    p.add_argument('--render-only', action='store_true', help='Redraw saved coordinates without loading the model or data')
     a = p.parse_args()
+    if a.render_only:
+        if a.output_dir is None: p.error('--render-only requires --output-dir')
+        render_cache(a.output_dir)
+        return
     if (a.sample_mode == 'random' and a.max_samples < 32) or a.max_iter < 300 or a.threads < 1 or a.d_pca_dim < 0:
         p.error('Require max-samples >=32, max-iter >=300, threads >=1, d-pca-dim >=0')
     a.checkpoint = a.checkpoint.resolve()
@@ -117,7 +159,7 @@ def main():
             for branch in ('sub', 'task'):
                 values[f'full_all_z_{branch}'] = full[f'z_{branch}']
                 values[f'full_all_d_{branch}'] = full[f'd_{branch}'].flatten(1)
-            if a.views == 'all':
+            if a.views in ('all', 'few'):
                 few = model._encode_dynamic_tokens(model._patch_tokens(x_obs), fullchannel=False)
                 miss_indices = few['miss_indices']
                 if len(miss_indices) != n_missing:
@@ -128,6 +170,8 @@ def main():
                     values[f'full_missing_d_{branch}'] = full_missing_d.flatten(1)
                     values[f'few_missing_z_{branch}'] = few[f'z_{branch}']
                     values[f'few_missing_d_{branch}'] = few[f'd_{branch}'].flatten(1)
+                if a.views == 'few':
+                    values = {key:value for key,value in values.items() if key.startswith('few_missing_')}
             count = len(batch[1])
             for key, tensor in values.items():
                 x = tensor.cpu().numpy()
@@ -161,6 +205,9 @@ def main():
         'observed_channels': observed_channels,
         'correction_definition': 'Raw branch output; no tanh or correction_scale multiplication',
         'note': 'Same frozen checkpoint (default: this experiment Stage1 best), eval/no_grad; full_all/full_missing/few_missing differ in input or selected positions, not checkpoint. Independent t-SNE fits; axes across views are not comparable.'}
+    if train_args.dataset == 'ERPCORE':
+        from plot_disentanglement_four_column import TASK_NAMES
+        reference['TASK_NAMES'].update(TASK_NAMES)
     coordinates = {}
     for key, x in features.items():
         print(f'{key}: {x.shape} -> t-SNE', flush=True)
@@ -195,7 +242,9 @@ def main():
     titles = {'full_all': f'Full input: all {n_full} positions',
               'full_missing': f'Full input: matched missing {n_missing} positions',
               'few_missing': f'{n_obs} real + {n_missing} prototypes: missing {n_missing} positions'}
-    if a.views != 'all':
+    if a.views == 'few':
+        titles = {'few_missing': titles['few_missing']}
+    elif a.views != 'all':
         titles = {'full_all': titles['full_all']}
     def panels(axes, view, kind):
         for axis, (branch, label) in zip(axes, [('sub','subject'),('sub','task'),('task','task'),('task','subject')]):
