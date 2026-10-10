@@ -9,10 +9,9 @@ import os
 from pathlib import Path
 import sys
 
-OUT = Path(__file__).resolve().parent
-ROOT = next(parent for parent in OUT.parents if (parent / 'run_preexp16_erpcore_cslp.py').is_file())
-EXPERIMENT = OUT.parent
-CKPT = EXPERIMENT / 'stage2/checkpoint-last.pth'
+EXPERIMENT = Path(__file__).resolve().parent
+ROOT = next(parent for parent in EXPERIMENT.parents if (parent / 'run_dynamic_stage1.py').is_file())
+CKPT = EXPERIMENT / 'stage2/checkpoint-19.pth'
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -24,9 +23,16 @@ def main():
     p.add_argument('--threads', type=int, default=4)
     p.add_argument('--d-pca-dim', type=int, default=50, help='0: direct t-SNE of flattened D (slower)')
     p.add_argument('--checkpoint', type=Path, default=CKPT)
+    p.add_argument('--output-dir', type=Path, default=None,
+                   help='Default: checkpoint directory / tsne_z_d_few_all')
     a = p.parse_args()
-    if a.max_samples < 32 or a.max_iter < 250 or a.threads < 1 or a.d_pca_dim < 0:
-        p.error('Require max-samples >=32, max-iter >=250, threads >=1, d-pca-dim >=0')
+    if a.max_samples < 32 or a.max_iter < 300 or a.threads < 1 or a.d_pca_dim < 0:
+        p.error('Require max-samples >=32, max-iter >=300, threads >=1, d-pca-dim >=0')
+    a.checkpoint = a.checkpoint.resolve()
+    if not a.checkpoint.is_file():
+        p.error(f'Checkpoint not found: {a.checkpoint}')
+    out = (a.output_dir or a.checkpoint.parent / 'tsne_z_d_few_all').resolve()
+    out.mkdir(parents=True, exist_ok=True)
     os.environ['OMP_NUM_THREADS'] = str(a.threads)
     os.environ['OPENBLAS_NUM_THREADS'] = str(a.threads)
     os.environ['MKL_NUM_THREADS'] = str(a.threads)
@@ -41,8 +47,10 @@ def main():
     from torch.utils.data import DataLoader, Subset
     sys.path.insert(0, str(ROOT))
     os.chdir(ROOT)
-    from run_preexp16_erpcore_cslp import build_model
-    from data_processor.erpcore_cslp import prepare_ERPCORE_cslp_dataset
+    from run_dynamic_stage1 import get_models, _validate_completion_prototype
+    from data_processor.erpcore import prepare_ERPCORE_pt_dataset
+    from Channels_definition import ERPCORE_12_CHANNELS, ERPCORE_28_CHANNELS
+    import utils
     # Keep the same labels/colors without depending on another experiment script.
     reference = {'TASK_NAMES': {0: 'ERN/Incorrect', 1: 'ERN/Correct', 2: 'LRP/Contralateral', 3: 'LRP/Ipsilateral', 4: 'MMN/Deviants', 5: 'MMN/Standards', 6: 'N2pc/Contralateral', 7: 'N2pc/Ipsilateral', 8: 'N400/Unrelated', 9: 'N400/Related', 10: 'P3/Rare', 11: 'P3/Frequent'}, 'TASK_COLORS': {0: '#1479D1', 1: '#73B7F2', 2: '#F07818', 3: '#FFB15C', 4: '#159447', 5: '#78C86A', 6: '#D62828', 7: '#F18181', 8: '#7441A8', 9: '#B28BD0', 10: '#8C564B', 11: '#D59B8B'}}
     torch.set_num_threads(a.threads)
@@ -50,17 +58,28 @@ def main():
     ck = torch.load(a.checkpoint, map_location='cpu', weights_only=False)
     train_args = ck['args']
     original_args = vars(train_args).copy()
-    train_args.oracle_missing = False
-    train_args.g_sub = train_args.g_task = 1.0
-    train_args.gate_mode = 'fixed'
-    _, test, _ = prepare_ERPCORE_cslp_dataset(train_args.data_path,
-        sampling_rate=train_args.sampling_rate, normalize_method=train_args.norm_method)
+    if train_args.dataset.upper() != 'ERPCORE' or train_args.completion_scope != 'erpcore12_with_erpcore28':
+        raise ValueError('Expected an ERP-Core 12-to-28 Dynamic checkpoint')
+    _, test, _ = prepare_ERPCORE_pt_dataset(train_args.data_path,
+        sampling_rate=train_args.sampling_rate, normalize_method=train_args.norm_method,
+        channel_names=ERPCORE_12_CHANNELS)
     n = min(a.max_samples, len(test))
     selected = np.sort(np.random.default_rng(42).choice(len(test), n, replace=False))
-    subjects, tasks = np.asarray(test.subjects)[selected], np.asarray(test.labels)[selected]
+    subjects = np.asarray([int(test.subject_values[int(test.indices[i])]) for i in selected])
+    tasks = np.asarray(test.labels)[selected]
     device = torch.device(a.device if torch.cuda.is_available() else 'cpu')
-    model = build_model(train_args)
+    proto = torch.load(train_args.channel_prototype_path, map_location='cpu', weights_only=False)
+    if list(proto['ch_names']) != ERPCORE_28_CHANNELS:
+        raise ValueError('Prototype order does not match ERP-Core full-channel input')
+    target_indices = [int(i) for i in proto['input_chans_index']]
+    _validate_completion_prototype(train_args, ERPCORE_12_CHANNELS, proto['ch_names'],
+                                   target_indices, proto['channel_prototypes'])
+    model = get_models(train_args)
     model.load_state_dict(ck['model'], strict=True)
+    model.completion_scope = train_args.completion_scope
+    model.pooling_scope = train_args.pooling_scope
+    model.real_input_chans_index = list(utils.get_input_chans(ERPCORE_12_CHANNELS))
+    model.target_input_chans_index = target_indices
     model.to(device).eval().requires_grad_(False)
     loader = DataLoader(Subset(test, selected.tolist()), batch_size=a.batch_size,
                         num_workers=a.num_workers, shuffle=False, pin_memory=device.type == 'cuda')
@@ -69,25 +88,34 @@ def main():
     # Save raw features incrementally; all views have exactly the same sample order.
     with torch.no_grad():
         for batch in loader:
-            mb = {k: (v.float().to(device) * float(train_args.input_scale)
-                      if k.startswith('x_') else v.to(device)) for k, v in batch.items()}
-            full = model.forward_fullchannel_contrastive(mb)
-            few = model.encode_personal(mb)
+            scale = float(getattr(train_args, 'input_scale', 1.0))
+            x_obs, x_full = [batch[i].float().to(device) * scale for i in (2, 3)]
+            if x_obs.shape[1] != 12 or x_full.shape[1] != 28 or x_full.shape[-1] % 200:
+                raise ValueError(f'Unexpected observed/full shapes: {x_obs.shape}, {x_full.shape}')
+            x_obs = x_obs.reshape(x_obs.shape[0], 12, -1, 200)
+            x_full = x_full.reshape(x_full.shape[0], 28, -1, 200)
+            full = model._encode_dynamic_tokens(model._patch_tokens(x_full), fullchannel=True)
+            few = model._encode_dynamic_tokens(model._patch_tokens(x_obs), fullchannel=False)
+            miss_indices = few['miss_indices']
+            if len(miss_indices) != 16:
+                raise ValueError('Expected 16 missing channels')
             values = {}
             for branch in ('sub', 'task'):
+                full_d = full[f'd_{branch}']
+                full16_d = full_d.index_select(1, miss_indices)
                 values[f'full28_z_{branch}'] = full[f'z_{branch}']
-                values[f'full28_d_{branch}'] = full[f'd_{branch}'].flatten(1)
-                values[f'full16_z_{branch}'] = full[f'{branch}_tokens'].index_select(1, model.miss_indices).mean(1)
-                values[f'full16_d_{branch}'] = full[f'd_{branch}'].index_select(1, model.miss_indices).flatten(1)
+                values[f'full28_d_{branch}'] = full_d.flatten(1)
+                values[f'full16_z_{branch}'] = full16_d.flatten(1, 2).mean(1)
+                values[f'full16_d_{branch}'] = full16_d.flatten(1)
                 values[f'few16_z_{branch}'] = few[f'z_{branch}']
                 values[f'few16_d_{branch}'] = few[f'd_{branch}'].flatten(1)
-            count = len(batch['label'])
+            count = len(batch[1])
             for key, tensor in values.items():
                 x = tensor.cpu().numpy()
                 if not np.isfinite(x).all():
                     raise ValueError(f'Nonfinite features: {key}')
                 if key not in features:
-                    features[key] = np.lib.format.open_memmap(OUT / f'{key}.npy', mode='w+',
+                    features[key] = np.lib.format.open_memmap(out / f'{key}.npy', mode='w+',
                                                               dtype='float32', shape=(n, x.shape[1]))
                 features[key][offset:offset+count] = x
             offset += count
@@ -95,7 +123,7 @@ def main():
     assert offset == n
     for x in features.values():
         x.flush()
-    with (OUT / 'sample_alignment.csv').open('w') as f:
+    with (out / 'sample_alignment.csv').open('w') as f:
         writer = csv.writer(f)
         writer.writerow(['test_local_index', 'payload_index', 'subject', 'task'])
         writer.writerows(zip(selected, np.asarray(test.indices)[selected], subjects, tasks))
@@ -104,6 +132,10 @@ def main():
         'checkpoint_args': original_args, 'cli': vars(a), 'split': 'test', 'samples': n,
         'sample_seed': 42, 'tsne_seed': 1968125571, 'perplexity': 30,
         'device_used': str(device), 'features': {},
+        'training_fullchannel': bool(getattr(train_args, 'fullchannel', False)),
+        'target_channels': proto['ch_names'],
+        'observed_channels': ERPCORE_12_CHANNELS,
+        'correction_definition': 'Raw branch output; no tanh or correction_scale multiplication',
         'note': 'Same frozen checkpoint (default: this experiment Stage2), eval/no_grad; full28/full16/few16 differ in input or selected positions, not checkpoint. Independent t-SNE fits; axes across views are not comparable.'}
     coordinates = {}
     for key, x in features.items():
@@ -122,11 +154,13 @@ def main():
         kwargs[iteration_key] = a.max_iter
         estimator = TSNE(**kwargs)
         coordinates[key] = estimator.fit_transform(tx)
-        np.save(OUT / f'{key}_tsne.npy', coordinates[key])
+        if not np.isfinite(coordinates[key]).all() or not np.isfinite(estimator.kl_divergence_):
+            raise ValueError(f'Nonfinite t-SNE output: {key}')
+        np.save(out / f'{key}_tsne.npy', coordinates[key])
         info['kl_divergence'] = float(estimator.kl_divergence_)
         metadata['features'][key] = info
-        (OUT / 'metadata.json').write_text(json.dumps(metadata, indent=2, default=str))
-    np.savez_compressed(OUT / 'tsne_coordinates.npz', **coordinates, subjects=subjects, tasks=tasks,
+        (out / 'metadata.json').write_text(json.dumps(metadata, indent=2, default=str))
+    np.savez_compressed(out / 'tsne_coordinates.npz', **coordinates, subjects=subjects, tasks=tasks,
                         selected_test_indices=selected)
     sub_ids = sorted(np.unique(subjects))
     sub_colors = dict(zip(sub_ids, plt.get_cmap('nipy_spectral')(np.linspace(0, 1, len(sub_ids)))))
@@ -149,8 +183,8 @@ def main():
         fig.legend(handles=handles_sub, title='Subject', loc='upper right', bbox_to_anchor=(.998,.90), fontsize=8)
         fig.legend(handles=handles_task, title='ERP task', loc='lower right', bbox_to_anchor=(.998,.07), fontsize=8)
         fig.subplots_adjust(left=.03, right=.83, bottom=.04, top=.90, wspace=.10, hspace=.28)
-        fig.savefig(OUT / f'{name}.png', dpi=180)
-        fig.savefig(OUT / f'{name}.pdf', dpi=180)
+        fig.savefig(out / f'{name}.png', dpi=180)
+        fig.savefig(out / f'{name}.pdf', dpi=180)
         plt.close(fig)
     for kind in ('z', 'd'):
         for view in titles:
@@ -164,7 +198,7 @@ def main():
             axes[row,0].set_ylabel(titles[view], fontsize=9)
         fig.suptitle(f'{kind}: full vs few input | same frozen checkpoint {a.checkpoint.parent.name} epoch {ck.get("epoch")} | Test n={n}')
         save(fig, f'comparison_{kind}_tsne')
-    print(f'Done: {OUT}', flush=True)
+    print(f'Done: {out}', flush=True)
 
 if __name__ == '__main__':
     main()
