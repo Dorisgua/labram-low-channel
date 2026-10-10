@@ -1,5 +1,9 @@
 # Training outputs
-outputs/
+# Ignore experiment artifacts, but allow Python and Shell scripts
+outputs/**
+!outputs/**/
+!outputs/**/*.py
+!outputs/**/*.sh
 legacy_outputs/
 launcher_logs/
 selected_batch_logs/
